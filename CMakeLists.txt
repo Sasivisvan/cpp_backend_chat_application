@@ -22,9 +22,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)   # Don't fall back to older standards
 #
 # FetchContent downloads it from GitHub at build time. No manual install needed.
 # ============================================================================
-# Silence the CMP0135 timestamp warning for URL downloads
+# Silence the CMP0135 timestamp warning (only on CMake 3.24+, older versions don't have it)
 include(FetchContent)
-cmake_policy(SET CMP0135 NEW)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 
 FetchContent_Declare(
     crow                                                    # Name we give it
