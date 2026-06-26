@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/chatserver.dir/link.d CMakeFiles/chatserver.dir/server.cpp.o -o chatserver

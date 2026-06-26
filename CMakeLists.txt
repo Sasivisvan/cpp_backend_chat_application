@@ -22,12 +22,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)   # Don't fall back to older standards
 #
 # FetchContent downloads it from GitHub at build time. No manual install needed.
 # ============================================================================
+# Silence the CMP0135 timestamp warning for URL downloads
 include(FetchContent)
+cmake_policy(SET CMP0135 NEW)
 
 FetchContent_Declare(
     crow                                                    # Name we give it
     GIT_REPOSITORY https://github.com/CrowCpp/Crow.git     # Where to get it
-    GIT_TAG        v1.2.0                                   # Specific version (stable)
+    GIT_TAG        v1.3.2                                   # Latest stable version
+    GIT_SHALLOW    ON                                       # Only fetch latest commit (fast!)
+    # GIT_SHALLOW ON means: "don't download the full git history, just the
+    # snapshot at this tag." This makes the download ~10x faster.
 )
 FetchContent_MakeAvailable(crow)  # Download and make it available to our project
 

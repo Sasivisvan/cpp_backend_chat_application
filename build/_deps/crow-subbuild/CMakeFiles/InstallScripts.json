@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/sasi/Documents/cppserver/chatserver/build/_deps/crow-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

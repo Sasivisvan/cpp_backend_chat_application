@@ -248,7 +248,10 @@ int main() {
     // --------------------------------------------------------------------
     // Clean up: remove them from our set and tell everyone they left.
     // --------------------------------------------------------------------
-    .onclose([](crow::websocket::connection& conn, const std::string& /*reason*/) {
+    .onclose([](crow::websocket::connection& conn, const std::string& /*reason*/, uint16_t /*code*/) {
+        // Crow v1.3+ passes three args: connection, reason string, and a
+        // numeric close code (e.g. 1000 = normal, 1006 = abnormal).
+        // We don't need the code for our chat, so we ignore it.
         std::lock_guard<std::mutex> lock(mtx);
 
         std::string name = usernames[&conn];
