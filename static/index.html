@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time chat powered by a C++ WebSocket server">
+    <title>Void Chat — Real-Time Messenger</title>
+
+    <!-- Google Font: Inter — clean, modern, highly readable -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <!-- ================================================================== -->
+    <!-- STAR FIELD BACKGROUND                                              -->
+    <!-- These divs are animated via CSS to create drifting star layers.     -->
+    <!-- Three layers at different speeds = parallax depth effect.           -->
+    <!-- ================================================================== -->
+    <div class="stars stars-1"></div>
+    <div class="stars stars-2"></div>
+    <div class="stars stars-3"></div>
+
+    <!-- ================================================================== -->
+    <!-- USERNAME MODAL                                                     -->
+    <!-- Shown on first visit. The user picks a name, then we connect the   -->
+    <!-- WebSocket and send a "set_username" message (Step 3 of roadmap).   -->
+    <!-- ================================================================== -->
+    <div class="modal-overlay" id="usernameModal">
+        <div class="modal">
+            <div class="modal-glow"></div>
+            <h1 class="modal-title">
+                <span class="title-icon">◈</span>
+                Void Chat
+            </h1>
+            <p class="modal-subtitle">Enter the void. Speak freely.</p>
+            <form id="usernameForm">
+                <input
+                    type="text"
+                    id="usernameInput"
+                    placeholder="Choose your callsign..."
+                    maxlength="20"
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" id="joinBtn">
+                    <span class="btn-text">Initialize Connection</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- MAIN CHAT INTERFACE                                                -->
+    <!-- Hidden until the user picks a username. Three sections:            -->
+    <!--   1. Header bar (app name + connection status)                     -->
+    <!--   2. Chat area (messages + sidebar)                                -->
+    <!--   3. Input bar (type & send)                                       -->
+    <!-- ================================================================== -->
+    <div class="chat-app" id="chatApp" style="display: none;">
+
+        <!-- Header -->
+        <header class="chat-header">
+            <div class="header-left">
+                <span class="header-icon">◈</span>
+                <h1>Void Chat</h1>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connected</span>
+                </div>
+                <div class="user-badge" id="userBadge">
+                    <span class="badge-avatar" id="badgeAvatar">?</span>
+                    <span class="badge-name" id="badgeName">—</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Body: Messages + Sidebar -->
+        <div class="chat-body">
+
+            <!-- Messages Area -->
+            <main class="messages-panel">
+                <div class="messages" id="messages">
+                    <!-- Messages are injected here by app.js -->
+                </div>
+            </main>
+
+            <!-- Online Users Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-icon">●</span>
+                    Online
+                    <span class="user-count" id="userCount">0</span>
+                </div>
+                <ul class="user-list" id="userList">
+                    <!-- User list items injected by app.js -->
+                </ul>
+            </aside>
+        </div>
+
+        <!-- Input Bar -->
+        <footer class="input-bar">
+            <form id="messageForm">
+                <input
+                    type="text"
+                    id="messageInput"
+                    placeholder="Send a message..."
+                    autocomplete="off"
+                    maxlength="500"
+                >
+                <button type="submit" id="sendBtn" title="Send message">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
