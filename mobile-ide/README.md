@@ -147,8 +147,8 @@ The IDE is a normal Node app, so you can also run it on a computer or VPS and us
 the screen. Phone control needs Termux, so it only works on Android.
 
 ```bash
-cd mobile-ide && npm install && npm run build
-HOST=0.0.0.0 WORKSPACE=~/projects node server.js     # prints LAN URLs with the token
+cd mobile-ide && npm install && npm run build     # builds public/dist and dist/server.mjs
+HOST=0.0.0.0 WORKSPACE=~/projects node dist/server.mjs     # prints LAN URLs with the token
 ```
 
 Use a private network such as Tailscale or WireGuard, or a reverse proxy with HTTPS, rather than
@@ -193,6 +193,9 @@ exposing the port to the internet.
   with `pocket-ide`.
 - **Location returns nothing**: check that Termux:API has location permission and that location
   is on. Indoors, `phone location` (network) works better than `--gps`.
+- **`claude: command not found` in Termux**: Claude Code lives inside Ubuntu. Setup adds a
+  `claude` command to Termux that runs it there (and `ubuntu` for a shell inside Ubuntu). The
+  IDE's Claude tab works too.
 - **Claude Code fails to start in Ubuntu**: try `npm i -g @anthropic-ai/claude-code@latest`, or
   the native installer `curl -fsSL https://claude.ai/install.sh | bash` inside
   `proot-distro login ubuntu`.
