@@ -54,6 +54,10 @@ final class PayloadServer implements Runnable {
             String path = parts.length > 1 ? parts[1] : "/";
             while ((line = in.readLine()) != null && !line.isEmpty()) { /* skip headers */ }
 
+            // "/x.raw" = body only, no HTTP headers, so plain bash can download it via
+            // /dev/tcp even when Termux's curl is broken.
+            boolean raw = path.endsWith(".raw");
+            if (raw) path = path.substring(0, path.length() - 4);
             String asset = null, type = "application/octet-stream";
             if (path.equals("/setup.sh")) { asset = "payload/setup.sh"; type = "text/x-shellscript"; }
             else if (path.equals("/pocket-ide.tar.gz")) { asset = "payload/pocket-ide.tar.gz"; type = "application/gzip"; }
@@ -65,9 +69,11 @@ final class PayloadServer implements Runnable {
             }
             byte[] body;
             try (InputStream is = assets.open(asset)) { body = readAll(is); }
-            String head = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length
-                    + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
-            out.write(head.getBytes("ISO-8859-1"));
+            if (!raw) {
+                String head = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length
+                        + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+                out.write(head.getBytes("ISO-8859-1"));
+            }
             out.write(body);
             out.flush();
         } catch (Exception ignored) {

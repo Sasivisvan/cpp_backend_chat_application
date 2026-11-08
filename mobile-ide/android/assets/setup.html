@@ -68,6 +68,24 @@
   </div>
 </div>
 
+<div class="step">
+  <h2>Something went wrong?</h2>
+  <p>If Termux shows <b>CANNOT LINK EXECUTABLE … cannot locate symbol</b> (for <code style="display:inline;padding:1px 4px">curl</code>, <code style="display:inline;padding:1px 4px">node</code>, …), its packages are half-upgraded. Tap <b>Repair Termux</b>, wait for “Done”, then do step 3 again.</p>
+  <div class="row">
+    <button class="primary" id="repairBtn">Repair Termux</button>
+    <button id="copyRepair">Copy repair command</button>
+    <button id="mirrorBtn">Change mirror</button>
+  </div>
+  <details>
+    <summary>Manual fixes</summary>
+    <p><b>Repair packages:</b></p><code>apt update &amp;&amp; apt full-upgrade -y -o Dpkg::Options::=--force-confnew</code>
+    <p><b>If that fails with an SSL/download error:</b></p><code>apt install -y openssl</code>
+    <p><b>If the mirror is down:</b></p><code>termux-change-repo</code>
+    <p><b>Check:</b></p><code>curl --version | head -1 &amp;&amp; node -v</code>
+    <p><b>See why the IDE didn't start:</b></p><code>pocket-ide</code>
+  </details>
+</div>
+
 <div class="step" id="s4">
   <h2>4 · Let this app start Termux <span class="badge" id="b4"></span></h2>
   <p>Grant the <b>“Run commands in Termux environment”</b> permission so the Start button works.</p>
@@ -101,7 +119,13 @@ const $ = (id) => document.getElementById(id);
 const raw = `https://raw.githubusercontent.com/${A.repo()}/${A.branch()}/mobile-ide/termux-setup.sh`;
 // The installer and the IDE source come from this app (127.0.0.1:8786), not GitHub,
 // so setup works even though the repository is private.
-const SETUP_CMD = `mkdir -p ~/.termux && (grep -q '^allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps=true' >> ~/.termux/termux.properties) && termux-reload-settings; curl -fsSLo pocket-setup.sh http://127.0.0.1:8786/setup.sh && POCKET_SRC_URL=http://127.0.0.1:8786/pocket-ide.tar.gz bash pocket-setup.sh`;
+// Downloads the installer from this app with bash's built-in /dev/tcp (no curl), so it
+// still works when Termux's curl is broken by a half-finished upgrade. The installer
+// then repairs/upgrades Termux before doing anything else.
+const FETCH_FN = `f(){ exec 3<>/dev/tcp/127.0.0.1/8786 && printf 'GET /%s.raw HTTP/1.0\\r\\n\\r\\n' "$1" >&3 && cat <&3 >"$2"; exec 3<&-; }`;
+const SETUP_CMD = `mkdir -p ~/.termux ~/.pocket-ide; grep -q '^allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps=true' >> ~/.termux/termux.properties; termux-reload-settings 2>/dev/null; ${FETCH_FN}; f setup.sh ~/.pocket-ide/setup.sh && f pocket-ide.tar.gz ~/.pocket-ide/src.tar.gz && POCKET_SRC_FILE=~/.pocket-ide/src.tar.gz bash ~/.pocket-ide/setup.sh`;
+// Fixes "CANNOT LINK EXECUTABLE ... cannot locate symbol" (half-upgraded Termux).
+const REPAIR_CMD = `echo '==> Repairing Termux packages'; O='-y -o Dpkg::Options::=--force-confnew -o Dpkg::Options::=--force-confdef'; if apt update; then apt full-upgrade $O || { apt install $O openssl; apt full-upgrade $O; }; apt install --reinstall $O openssl libcurl curl libc++ nodejs-lts; echo; echo "curl: $(curl --version 2>&1 | head -1)"; echo "node: $(node -v 2>&1)"; echo; echo '==> Done. If both lines show versions, go back to the app and run setup again.'; else echo; echo 'Mirror unreachable: run  termux-change-repo  , pick another mirror, then tap Repair again.'; fi`;
 const START_CMD = `mkdir -p ~/.pocket-ide; if command -v pocket-ide >/dev/null; then pocket-ide --app > ~/.pocket-ide/ide.log 2>&1; else am start -a android.intent.action.VIEW -d 'pocketide://open?missing=1' >/dev/null; fi`;
 const LOG_CMD = `echo '--- last Pocket IDE start (~/.pocket-ide/ide.log) ---'; tail -n 60 ~/.pocket-ide/ide.log 2>/dev/null || echo 'no log yet'; echo; echo 'Tip: run  pocket-ide  here to start it and watch the output.'`;
 window.showLog = () => { const r = A.runInTermux(LOG_CMD, false); if (r !== 'ok' && r !== 'permission') A.toast(r); };
@@ -135,6 +159,17 @@ $('copyCmd').onclick = () => { A.copy(SETUP_CMD); localStorage.setItem('setupCop
 $('permBtn').onclick = () => A.requestRunCommandPermission();
 $('appPerms').onclick = () => A.appSettings('com.pocketide.app');
 $('updApp').onclick = () => A.promptUpdate();
+function termuxRun(cmd, copyFallback) {
+  const r = A.runInTermux(cmd, false);
+  if (r === 'ok' || r === 'permission') return;
+  // No permission / external apps not allowed yet: copy it and open Termux instead.
+  A.copy(copyFallback || cmd);
+  A.toast('Copied. Paste it in Termux and press Enter.');
+  setTimeout(() => A.openApp('com.termux'), 400);
+}
+$('repairBtn').onclick = () => termuxRun(REPAIR_CMD);
+$('copyRepair').onclick = () => { A.copy(REPAIR_CMD); setTimeout(() => A.openApp('com.termux'), 400); };
+$('mirrorBtn').onclick = () => termuxRun('termux-change-repo');
 $('updIde').onclick = () => {
   const r = A.runInTermux('if command -v pocket-update >/dev/null; then pocket-update; else ' + SETUP_CMD + '; fi', false);
   if (r !== 'ok' && r !== 'permission') A.toast(r);

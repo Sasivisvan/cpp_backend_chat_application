@@ -183,6 +183,12 @@ exposing the port to the internet.
 
 ## Troubleshooting
 
+- **`CANNOT LINK EXECUTABLE "curl"/"node": cannot locate symbol …`**: Termux's packages are
+  half-upgraded. In the app, tap **Repair Termux**, or run
+  `apt update && apt full-upgrade -y -o Dpkg::Options::=--force-confnew` (then `apt install -y openssl`
+  if it fails with an SSL error). The setup script now repairs this itself, and the app's setup
+  command downloads without curl, so a broken curl can't block it.
+
 - **`phone: cannot reach the phone bridge`**: run `pocket-bridge` in a Termux session, or restart
   with `pocket-ide`.
 - **Location returns nothing**: check that Termux:API has location permission and that location
