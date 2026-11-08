@@ -336,6 +336,74 @@ async function refreshOpenFiles() {
 }
 
 // ---------- terminals (shell + Claude) ----------
+// ---------- touch scrolling ----------
+// xterm.js barely scrolls with a finger on phones. Swipe = scroll with momentum:
+//  - normal output (shell, Claude Code): scroll the scrollback
+//  - full-screen apps that capture the mouse: send mouse-wheel events to the app
+//  - full-screen apps without mouse: send PageUp / PageDown
+function scrollTerm(s, lines) {
+  const t = s.term;
+  if (!lines) return;
+  if (t.modes.mouseTrackingMode && t.modes.mouseTrackingMode !== 'none') {
+    const btn = lines < 0 ? 64 : 65;
+    const col = Math.max(1, Math.floor(t.cols / 2)), row = Math.max(1, Math.floor(t.rows / 2));
+    const n = Math.min(Math.abs(lines), 15);
+    let seq = '';
+    for (let i = 0; i < n; i++) seq += `\x1b[<${btn};${col};${row}M`;
+    s.write(seq);
+  } else if (t.buffer.active.type === 'alternate') {
+    const pages = Math.max(1, Math.round(Math.abs(lines) / Math.max(1, t.rows - 2)));
+    s.write((lines < 0 ? '\x1b[5~' : '\x1b[6~').repeat(pages));
+  } else {
+    t.scrollLines(lines);
+  }
+}
+function scrollPage(s, dir) {
+  const t = s.term;
+  if (dir === 0) { t.scrollToBottom(); return; }
+  scrollTerm(s, dir * Math.max(1, t.rows - 2));
+}
+function attachTouchScroll(s) {
+  const el = s.el;
+  const lineH = () => {
+    const r = el.querySelector('.xterm-rows');
+    return (r && r.firstElementChild && r.firstElementChild.getBoundingClientRect().height) || s.term.options.fontSize * 1.25;
+  };
+  let lastY = null, startY = 0, acc = 0, vel = 0, lastT = 0, moved = false, raf = 0;
+  const altStep = () => (s.term.buffer.active.type === 'alternate' && (!s.term.modes.mouseTrackingMode || s.term.modes.mouseTrackingMode === 'none')) ? Math.max(1, s.term.rows - 2) : 1;
+  const apply = (dy) => {
+    acc += dy / lineH();
+    const step = altStep();
+    const whole = acc > 0 ? Math.floor(acc / step) * step : Math.ceil(acc / step) * step;
+    if (whole) { acc -= whole; scrollTerm(s, whole); }
+  };
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    cancelAnimationFrame(raf);
+    lastY = startY = e.touches[0].clientY; lastT = performance.now(); vel = 0; acc = 0; moved = false;
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (lastY === null || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    if (!moved && Math.abs(y - startY) < 8) return; // let taps through
+    moved = true;
+    e.preventDefault();
+    e.stopPropagation();
+    const now = performance.now();
+    const dy = lastY - y; // finger up = scroll down (towards newer output)
+    vel = 0.8 * (dy / Math.max(1, now - lastT)) + 0.2 * vel;
+    lastY = y; lastT = now;
+    apply(dy);
+  }, { passive: false, capture: true });
+  el.addEventListener('touchend', () => {
+    lastY = null;
+    if (!moved || Math.abs(vel) < 0.3 || altStep() > 1) return;
+    let v = vel * 16; // px per frame
+    const tick = () => { apply(v); v *= 0.94; if (Math.abs(v) > 0.5) raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+  }, { passive: true });
+}
+
 const KEYMAP = { esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D', 'ctrl-c': '\x03' };
 const mods = { ctrl: false, alt: false };
 
@@ -366,7 +434,7 @@ class TermSession {
       fontSize: settings.fontSize - 1,
       fontFamily: 'ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace',
       cursorBlink: true,
-      scrollback: 5000,
+      scrollback: 10000,
       allowProposedApi: true,
       theme: { background: '#0f1115', foreground: '#e3e6ec', cursor: '#d97757', selectionBackground: '#3e4451' },
     });
@@ -377,6 +445,7 @@ class TermSession {
       else window.open(uri, '_blank');
     }));
     this.term.open(this.el);
+    attachTouchScroll(this);
     this.term.onData((d) => this.write(applyMods(d)));
     this.term.onResize(({ cols, rows }) => this.sendJSON({ t: 'resize', cols, rows }));
     this.title = panel.kind === 'claude' ? 'Claude' : 'bash';
@@ -505,6 +574,10 @@ $$('#keybar button').forEach((b) => {
       return;
     }
     const k = b.dataset.key;
+    if (k === 'pgup' || k === 'pgdn' || k === 'end') {
+      scrollPage(panel.active, k === 'pgup' ? -1 : k === 'pgdn' ? 1 : 0);
+      return;
+    }
     if (k === 'paste') {
       try { panel.send(window.PocketIDE ? window.PocketIDE.readClipboard() : await navigator.clipboard.readText()); }
       catch { const t = prompt('Paste text:'); if (t) panel.send(t); }
