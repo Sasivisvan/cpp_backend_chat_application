@@ -120,10 +120,29 @@ if [ "$(node_major)" -lt 20 ]; then
   apt-get install -y nodejs
 fi
 echo "Ubuntu node: $(/usr/bin/node -v)"
-npm install -g @anthropic-ai/claude-code
+export PATH=/root/.local/bin:$PATH
+# npm's cache is flaky under proot ("ENOENT … rename … _cacache"): retry with a
+# fresh cache each time.
+export npm_config_cache=/root/.cache/pocket-npm npm_config_fund=false npm_config_audit=false \
+       npm_config_fetch_retries=5 npm_config_update_notifier=false
+npm_retry() {
+  for i in 1 2 3 4; do
+    "$@" && return 0
+    echo "npm failed (attempt $i/4), clearing the npm cache and retrying..."
+    rm -rf "$npm_config_cache" /root/.npm/_cacache
+    sleep 3
+  done
+  return 1
+}
+if ! command -v claude >/dev/null; then
+  if ! npm_retry npm install -g @anthropic-ai/claude-code; then
+    echo "npm install of Claude Code failed; trying the official installer instead"
+    curl -fsSL https://claude.ai/install.sh | bash
+  fi
+fi
 claude --version || echo "warning: claude did not start; see README troubleshooting"
 cd /opt/pocket-ide
-npm install --no-audit --no-fund
+npm_retry npm install
 npm run build
 printf '#!/bin/sh\nexec node /opt/pocket-ide/bridge/phone.mjs "$@"\n' > /usr/local/bin/phone
 chmod +x /usr/local/bin/phone
