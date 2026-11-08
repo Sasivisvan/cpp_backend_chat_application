@@ -58,7 +58,9 @@ Linux. The installer handles all of this for you.
    restart after a reboot.
 2. Open Termux:API once and grant **Location** (choose "Allow all the time" for background
    location triggers) and **Notifications**.
-3. In Termux, run:
+3. **Easiest:** install the APK, open it, and tap **Copy & open Termux** in step 3. That
+   command installs everything from the copy bundled inside the app, so it works even while
+   the GitHub repo is private. Without the app, run this in Termux (the repo must be public):
 
    ```bash
    curl -fsSLo pocket-setup.sh https://raw.githubusercontent.com/sasivisvan/cpp_backend_chat_application/claude/tender-bardeen-qyata4/mobile-ide/termux-setup.sh && bash pocket-setup.sh

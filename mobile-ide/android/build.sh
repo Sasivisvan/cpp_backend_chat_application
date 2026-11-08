@@ -27,6 +27,14 @@ echo "SDK=$SDK build-tools=$BT_VER platform=$PLATFORM version=$VERSION_NAME ($VE
 
 rm -rf "$OUT" && mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
+# Bundle the Termux-side installer + IDE source into the APK (served on 127.0.0.1:8786).
+mkdir -p assets/payload
+cp ../termux-setup.sh assets/payload/setup.sh
+tar czf assets/payload/pocket-ide.tar.gz -C .. \
+  --exclude=node_modules --exclude=public/dist --exclude=android \
+  package.json package-lock.json build.js server.js client public bridge templates termux-setup.sh README.md
+echo "payload: $(du -h assets/payload/pocket-ide.tar.gz | cut -f1)"
+
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -o "$OUT/unsigned.apk" -I "$JAR" \
   --manifest AndroidManifest.xml -A assets --java "$OUT/gen" \

@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("pocketide", MODE_PRIVATE);
+        PayloadServer.start(getAssets()); // serves the bundled installer to Termux
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         web = new WebView(this);

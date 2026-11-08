@@ -28,15 +28,31 @@ if [ -z "${PREFIX:-}" ] || [ ! -d "$PREFIX" ]; then
   exit 1
 fi
 
-say "1/6  Installing Termux packages (git, node, termux-api, proot-distro)"
+# Where the code comes from:
+#   POCKET_SRC_URL set  -> a tarball (the Android app serves one from inside the APK
+#                          at http://127.0.0.1:8786, so a private GitHub repo is fine)
+#   otherwise           -> git clone from GitHub (repo must be public)
+# The tarball is fetched first, while the app that serves it is surely still alive.
+if [ -n "${POCKET_SRC_URL:-}" ]; then
+  say "1/6  Fetching Pocket IDE from the app"
+  TMP_TGZ="${TMPDIR:-$PREFIX/tmp}/pocket-ide.tar.gz"
+  curl -fsSL "$POCKET_SRC_URL" -o "$TMP_TGZ"
+  rm -rf "$SRC.new" && mkdir -p "$SRC.new/mobile-ide"
+  tar xzf "$TMP_TGZ" -C "$SRC.new/mobile-ide"
+  rm -rf "$SRC" && mv "$SRC.new" "$SRC" && rm -f "$TMP_TGZ"
+fi
+
+say "2/6  Installing Termux packages (git, node, termux-api, proot-distro)"
 pkg update -y -o Dpkg::Options::=--force-confnew
 pkg install -y -o Dpkg::Options::=--force-confnew git curl nodejs-lts termux-api proot-distro
 
-say "2/6  Fetching Pocket IDE"
-if [ -d "$SRC/.git" ]; then
-  git -C "$SRC" fetch --depth 1 origin "$BRANCH" && git -C "$SRC" reset --hard FETCH_HEAD
-else
-  git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$SRC"
+if [ -z "${POCKET_SRC_URL:-}" ]; then
+  say "     Fetching Pocket IDE from GitHub"
+  if [ -d "$SRC/.git" ]; then
+    git -C "$SRC" fetch --depth 1 origin "$BRANCH" && git -C "$SRC" reset --hard FETCH_HEAD
+  else
+    git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$SRC"
+  fi
 fi
 
 say "3/6  Creating shared access token"
@@ -111,8 +127,14 @@ EOF
 
 cat > "$PREFIX/bin/pocket-update" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
-# Pull the latest Pocket IDE and rebuild (your projects are untouched).
-curl -fsSLo "\$TMPDIR/pocket-setup.sh" "https://raw.githubusercontent.com/sasivisvan/cpp_backend_chat_application/$BRANCH/mobile-ide/termux-setup.sh" && bash "\$TMPDIR/pocket-setup.sh"
+# Reinstall Pocket IDE from the newest source (your projects are untouched).
+# Prefers the copy bundled in the Pocket IDE app (open the app first); falls back to GitHub.
+APPSRV=http://127.0.0.1:8786
+if curl -fsSLo "\$TMPDIR/pocket-setup.sh" "\$APPSRV/setup.sh" 2>/dev/null; then
+  POCKET_SRC_URL="\$APPSRV/pocket-ide.tar.gz" bash "\$TMPDIR/pocket-setup.sh"
+else
+  curl -fsSLo "\$TMPDIR/pocket-setup.sh" "https://raw.githubusercontent.com/sasivisvan/cpp_backend_chat_application/$BRANCH/mobile-ide/termux-setup.sh" && bash "\$TMPDIR/pocket-setup.sh"
+fi
 EOF
 chmod +x "$PREFIX/bin/pocket-bridge" "$PREFIX/bin/pocket-ide" "$PREFIX/bin/pocket-update"
 
