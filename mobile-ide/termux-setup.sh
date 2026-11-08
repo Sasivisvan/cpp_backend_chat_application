@@ -43,8 +43,16 @@ if [ -n "${POCKET_SRC_URL:-}" ]; then
 fi
 
 say "2/6  Installing Termux packages (git, node, termux-api, proot-distro)"
-pkg update -y -o Dpkg::Options::=--force-confnew
-pkg install -y -o Dpkg::Options::=--force-confnew git curl nodejs-lts termux-api proot-distro
+# Full upgrade first: a half-upgraded Termux breaks node with errors like
+# "CANNOT LINK EXECUTABLE node: cannot locate symbol _ZNSt6__ndk1…".
+APT_OPTS=(-y -o Dpkg::Options::=--force-confnew -o Dpkg::Options::=--force-confdef)
+pkg upgrade "${APT_OPTS[@]}"
+pkg install "${APT_OPTS[@]}" git curl nodejs-lts termux-api proot-distro
+if ! node -v >/dev/null 2>&1; then
+  say "     Termux node is broken, reinstalling it with its C++ runtime"
+  pkg install --reinstall "${APT_OPTS[@]}" libc++ nodejs-lts
+fi
+node -v >/dev/null 2>&1 || { echo "Termux's node still won't start. Run: pkg upgrade, then re-run this script." >&2; exit 1; }
 
 if [ -z "${POCKET_SRC_URL:-}" ]; then
   say "     Fetching Pocket IDE from GitHub"
@@ -75,14 +83,21 @@ cp "$HOME/.pocket-ide/token" "$ROOTFS/root/.pocket-ide/token"
 say "5/6  Installing Node.js, build tools and Claude Code inside Ubuntu"
 proot-distro login "$DISTRO" -- bash -s <<'UBUNTU'
 set -e
+# proot-distro appends Termux's bin dirs to PATH. Termux binaries are Android
+# builds that can't run here, so use Ubuntu's own PATH only.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y curl ca-certificates git build-essential python3 nano less ripgrep
-if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - || true
+node_major() { if [ -x /usr/bin/node ]; then /usr/bin/node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; else echo 0; fi; }
+if [ "$(node_major)" -lt 20 ]; then
+  apt-get install -y nodejs npm || true          # Ubuntu's own Node (22+ on recent releases)
+fi
+if [ "$(node_major)" -lt 20 ]; then
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
 fi
-node -v
+echo "Ubuntu node: $(/usr/bin/node -v)"
 npm install -g @anthropic-ai/claude-code
 claude --version || echo "warning: claude did not start; see README troubleshooting"
 cd /opt/pocket-ide
@@ -122,7 +137,8 @@ up() { curl -s -m 1 -o /dev/null "http://127.0.0.1:\$PORT/manifest.webmanifest";
 if up; then open_ide "\${1:-}"; exit 0; fi   # already running
 ( for i in \$(seq 1 120); do sleep 1; if up; then open_ide "\${1:-}"; break; fi; done ) &
 exec proot-distro login $DISTRO --shared-tmp -- env IDE_TOKEN="\$TOKEN" PORT="\$PORT" WORKSPACE=/root/projects \\
-  bash -lc 'cd /opt/pocket-ide && exec node server.js'
+  PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\
+  bash -c 'cd /opt/pocket-ide && exec node server.js'
 EOF
 
 cat > "$PREFIX/bin/pocket-update" <<EOF
