@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#16181d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Pocket IDE</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="dist/main.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="topbar">
+    <button id="menuBtn" class="icon-btn" aria-label="Files">☰</button>
+    <div id="title">
+      <span id="projectName">Pocket IDE</span>
+      <span id="subtitle"></span>
+    </div>
+    <button id="saveBtn" class="icon-btn" aria-label="Save" title="Save (Ctrl+S)">💾</button>
+    <button id="moreBtn" class="icon-btn" aria-label="More">⋮</button>
+  </header>
+
+  <div id="moreMenu" class="menu hidden">
+    <button data-act="newFile">New file</button>
+    <button data-act="newFolder">New folder</button>
+    <button data-act="search">Find / replace</button>
+    <button data-act="wrap">Toggle word wrap</button>
+    <button data-act="font+">Font size +</button>
+    <button data-act="font-">Font size −</button>
+    <button data-act="hidden">Show hidden files</button>
+    <button data-act="logout">Forget token</button>
+  </div>
+
+  <main id="main">
+    <!-- Files -->
+    <section id="panel-files" class="panel">
+      <div class="toolbar">
+        <button id="upBtn" class="chip">⬆ Up</button>
+        <span id="cwdLabel" class="path"></span>
+        <button id="refreshBtn" class="chip">⟳</button>
+        <button id="newFileBtn" class="chip">＋File</button>
+        <button id="newDirBtn" class="chip">＋Dir</button>
+      </div>
+      <ul id="fileList"></ul>
+    </section>
+
+    <!-- Editor -->
+    <section id="panel-code" class="panel">
+      <div id="editorTabs" class="tabs"></div>
+      <div id="editorHost"></div>
+      <div id="editorEmpty" class="empty">
+        <p>No file open.</p>
+        <p>Open one from <b>Files</b>, or ask <b>Claude</b> to build something.</p>
+      </div>
+    </section>
+
+    <!-- Terminal -->
+    <section id="panel-term" class="panel term-panel" data-kind="shell">
+      <div class="tabs term-tabs"></div>
+      <div class="term-host"></div>
+    </section>
+
+    <!-- Claude -->
+    <section id="panel-claude" class="panel term-panel" data-kind="claude">
+      <div class="tabs term-tabs"></div>
+      <div class="quick">
+        <button class="chip" data-send="/init">/init</button>
+        <button class="chip" data-send="Explain this project">Explain project</button>
+        <button class="chip" data-send="Build and run the project, then fix any errors">Build &amp; fix</button>
+        <button class="chip" data-send="Write tests for the recent changes and run them">Add tests</button>
+        <button class="chip" data-file="1">@current file</button>
+        <button class="chip" data-send="/help">/help</button>
+      </div>
+      <div class="term-host"></div>
+      <form id="promptForm">
+        <textarea id="promptInput" rows="1" placeholder="Message Claude…  (Enter = new line)"></textarea>
+        <button type="submit" class="send">➤</button>
+      </form>
+    </section>
+
+    <!-- Phone automations -->
+    <section id="panel-phone" class="panel">
+      <div class="toolbar">
+        <span id="bridgeStatus" class="path" style="direction:ltr">Phone bridge…</span>
+        <button id="phoneRefresh" class="chip">⟳</button>
+      </div>
+      <div id="phoneBody" class="scroll">
+        <div class="quick wrap">
+          <button class="chip" data-phone="location">📍 Where am I</button>
+          <button class="chip" data-phone="battery">🔋 Battery</button>
+          <button class="chip" data-phone="notify">🔔 Test notification</button>
+          <button class="chip" data-phone="vibrate">📳 Vibrate</button>
+          <button class="chip" data-phone="ask">✳️ Ask Claude to automate…</button>
+        </div>
+        <pre id="phoneOut" class="hidden"></pre>
+        <h3>Location triggers</h3>
+        <ul id="geoList" class="cards"></ul>
+        <h3>Reminders</h3>
+        <ul id="remList" class="cards"></ul>
+        <p class="hint">Ask Claude things like <i>“remind me to buy milk when I reach Anna Nagar”</i> or
+          <i>“every day at 7am tell me the battery level”</i>. It writes and runs the code with the <code>phone</code> command, and the result shows up here.</p>
+      </div>
+    </section>
+
+    <!-- Preview -->
+    <section id="panel-preview" class="panel">
+      <div class="toolbar">
+        <input id="previewUrl" type="url" value="http://localhost:3000" spellcheck="false" />
+        <button id="previewGo" class="chip">Go</button>
+        <button id="previewOpen" class="chip">↗</button>
+      </div>
+      <iframe id="previewFrame" title="App preview" sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals"></iframe>
+    </section>
+  </main>
+
+  <div id="keybar" class="hidden">
+    <button data-key="esc">Esc</button>
+    <button data-key="tab">Tab</button>
+    <button data-mod="ctrl">Ctrl</button>
+    <button data-mod="alt">Alt</button>
+    <button data-key="up">↑</button>
+    <button data-key="down">↓</button>
+    <button data-key="left">←</button>
+    <button data-key="right">→</button>
+    <button data-key="/">/</button>
+    <button data-key="-">-</button>
+    <button data-key="|">|</button>
+    <button data-key="~">~</button>
+    <button data-key="ctrl-c">^C</button>
+    <button data-key="paste">Paste</button>
+  </div>
+
+  <nav id="bottomnav">
+    <button data-panel="files">📁<span>Files</span></button>
+    <button data-panel="code">📝<span>Code</span></button>
+    <button data-panel="term">⌨️<span>Terminal</span></button>
+    <button data-panel="claude">✳️<span>Claude</span></button>
+    <button data-panel="phone">📱<span>Phone</span></button>
+    <button data-panel="preview">🌐<span>Preview</span></button>
+  </nav>
+
+  <div id="toast"></div>
+
+  <div id="login" class="hidden">
+    <div class="card">
+      <h2>Connect to Pocket IDE</h2>
+      <p>Paste the access token printed by the server (or open the full URL it printed).</p>
+      <input id="tokenInput" placeholder="token" autocomplete="off" spellcheck="false" />
+      <button id="tokenSave" class="primary">Connect</button>
+    </div>
+  </div>
+
+  <script type="module" src="dist/main.js"></script>
+</body>
+</html>

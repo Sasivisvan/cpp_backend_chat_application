@@ -1,0 +1,14 @@
+{
+  "name": "Pocket IDE",
+  "short_name": "Pocket IDE",
+  "description": "Code, terminals and Claude Code in your pocket",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#16181d",
+  "theme_color": "#16181d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
