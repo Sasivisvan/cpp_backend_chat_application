@@ -4,16 +4,19 @@
   "description": "Mobile-first code IDE with file explorer, editor, real terminals and Claude Code CLI",
   "type": "module",
   "main": "server.js",
-  "bin": { "pocket-ide": "server.js" },
+  "bin": {
+    "pocket-ide": "server.js"
+  },
   "scripts": {
     "build": "node build.js",
-    "start": "node server.js",
+    "start": "node dist/server.mjs",
     "dev": "node build.js && node server.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "express": "^4.21.2",
-    "node-pty": "^1.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -38,5 +41,8 @@
     "@xterm/xterm": "^5.5.0",
     "codemirror": "^6.0.1",
     "esbuild": "^0.24.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0"
   }
 }

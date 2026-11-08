@@ -2,3 +2,4 @@ node_modules/
 public/dist/
 android/build/
 android/assets/payload/
+dist/

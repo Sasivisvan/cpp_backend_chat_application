@@ -3,17 +3,21 @@
 // PTY terminals (bash, Claude Code CLI, anything you can run on a PC).
 import express from 'express';
 import { WebSocketServer } from 'ws';
-import pty from 'node-pty';
 import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Works both as server.js and as the prebuilt bundle in dist/server.mjs.
+const HERE = existsSync(path.join(__dirname, 'public')) ? __dirname : path.resolve(__dirname, '..');
+const PUBLIC_DIR = path.join(HERE, 'public');
+const PTY_HELPER = path.join(HERE, 'pty-helper.py');
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.resolve(process.env.WORKSPACE || path.join(os.homedir(), 'projects'));
@@ -51,7 +55,7 @@ function checkToken(t) {
 // ---------- http ----------
 const app = express();
 app.disable('x-powered-by');
-app.use(express.static(path.join(__dirname, 'public'), { index: 'index.html' }));
+app.use(express.static(PUBLIC_DIR, { index: 'index.html' }));
 app.use('/api', (req, res, next) => {
   if (checkToken(req.get('x-ide-token') || req.query.token)) return next();
   res.status(401).json({ error: 'Unauthorized: open the URL with ?token=… printed by the server' });
@@ -153,6 +157,38 @@ app.all('/api/phone/*', wrap(async (req, res) => {
 }));
 
 // ---------- terminals ----------
+// Terminals use the native node-pty addon when it's installed, otherwise a tiny
+// Python helper (pty-helper.py). The helper needs no compilation, which matters
+// on Android/proot where building native npm modules is unreliable.
+let nodePty = null;
+if (process.env.IDE_PTY !== 'python') {
+  try { nodePty = (await import('node-pty')).default; } catch { /* use the Python helper */ }
+}
+const PYTHON = process.env.IDE_PYTHON || (hasCommand('python3') ? 'python3' : 'python');
+
+function spawnPty(file, args, { cols, rows, cwd, env }) {
+  if (nodePty) return nodePty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd, env });
+  const child = spawn(PYTHON, [PTY_HELPER, file, ...args], {
+    cwd, env: { ...env, PTY_COLS: String(cols), PTY_ROWS: String(rows) },
+    stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+  });
+  const decoder = new StringDecoder('utf8');
+  const dataCbs = [];
+  const exitCbs = [];
+  const emit = (buf) => { const t = decoder.write(buf); if (t) dataCbs.forEach((cb) => cb(t)); };
+  child.stdout.on('data', emit);
+  child.stderr.on('data', emit);
+  child.on('error', (e) => dataCbs.forEach((cb) => cb(`\r\n\x1b[31mCould not start ${PYTHON}: ${e.message}\x1b[0m\r\n`)));
+  child.on('exit', (code, signal) => exitCbs.forEach((cb) => cb({ exitCode: code ?? (signal ? 128 : 1) })));
+  return {
+    onData: (cb) => dataCbs.push(cb),
+    onExit: (cb) => exitCbs.push(cb),
+    write: (d) => { if (child.stdin.writable) child.stdin.write(d); },
+    resize: (c, r) => { if (child.stdio[3]?.writable) child.stdio[3].write(`${r} ${c}\n`); },
+    kill: () => { try { child.kill('SIGTERM'); } catch {} },
+  };
+}
+
 // Sessions outlive the websocket so a phone that sleeps / switches apps can
 // reconnect and get its scrollback replayed.
 const sessions = new Map();
@@ -170,8 +206,7 @@ function createSession({ kind, cwd, cols, rows }) {
   } else if (os.platform() !== 'win32') {
     args = ['-l'];
   }
-  const p = pty.spawn(SHELL, args, {
-    name: 'xterm-256color',
+  const p = spawnPty(SHELL, args, {
     cols: Math.max(10, cols || 80),
     rows: Math.max(5, rows || 24),
     cwd,

@@ -38,7 +38,7 @@ jobs:
           yes | "$SDKM" --licenses > /dev/null || true
           "$SDKM" "platforms;android-34" "build-tools;35.0.0" > /dev/null
 
-      - name: Build web client (sanity check)
+      - name: Build web client + server bundle
         working-directory: mobile-ide
         run: npm ci --no-audit --no-fund && npm run build
 
@@ -64,7 +64,9 @@ jobs:
           name: Pocket IDE ${{ env.VERSION_NAME }}
           target_commitish: ${{ github.sha }}
           make_latest: true
-          files: mobile-ide/android/build/pocket-ide.apk
+          files: |
+            mobile-ide/android/build/pocket-ide.apk
+            mobile-ide/android/build/pocket-ide.tar.gz
           body: |
             **Download:** `pocket-ide.apk` below. If you already have the app, it will offer this update on next launch.
 

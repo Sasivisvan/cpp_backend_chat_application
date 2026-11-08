@@ -72,9 +72,16 @@ for b in curl node; do
 done
 echo "Termux OK: $(node -v), $(curl --version | head -1 | cut -d' ' -f1-2)"
 
+RELEASE_TGZ="${RELEASE_TGZ:-https://github.com/Sasivisvan/cpp_backend_chat_application/releases/latest/download/pocket-ide.tar.gz}"
 if [ -z "${POCKET_SRC_FILE:-}" ]; then
   say "     Fetching Pocket IDE from GitHub"
-  if [ -d "$SRC/.git" ]; then
+  TGZ="${TMPDIR:-$PREFIX/tmp}/pocket-ide.tar.gz"
+  if curl -fsSL "$RELEASE_TGZ" -o "$TGZ" && [ -s "$TGZ" ]; then
+    # Prebuilt release: no npm install needed on the phone.
+    rm -rf "$SRC.new" && mkdir -p "$SRC.new/mobile-ide"
+    tar xzf "$TGZ" -C "$SRC.new/mobile-ide"
+    rm -rf "$SRC" && mv "$SRC.new" "$SRC" && rm -f "$TGZ"
+  elif [ -d "$SRC/.git" ]; then
     git -C "$SRC" fetch --depth 1 origin "$BRANCH" && git -C "$SRC" reset --hard FETCH_HEAD
   else
     # ~/pocket-ide-src only holds Pocket IDE's own code (projects live in Ubuntu's
@@ -147,8 +154,16 @@ if ! command -v claude >/dev/null; then
 fi
 claude --version || echo "warning: claude did not start; see README troubleshooting"
 cd /opt/pocket-ide
-npm_retry npm install
-npm run build
+if [ -f dist/server.mjs ] && [ -f public/dist/main.js ]; then
+  # Prebuilt bundle (from the app or a GitHub release): no npm install on the
+  # phone, and no half-unpacked node_modules from proot's flaky file handling.
+  echo "Using the prebuilt IDE (no npm install needed)"
+  rm -rf node_modules
+else
+  npm_retry npm install
+  npm run build
+fi
+python3 -c 'import pty' && echo "Terminal helper OK (python3 pty)"
 printf '#!/bin/sh\nexec node /opt/pocket-ide/bridge/phone.mjs "$@"\n' > /usr/local/bin/phone
 chmod +x /usr/local/bin/phone
 UBUNTU
@@ -184,7 +199,21 @@ if up; then open_ide "\${1:-}"; exit 0; fi   # already running
 ( for i in \$(seq 1 120); do sleep 1; if up; then open_ide "\${1:-}"; break; fi; done ) &
 exec proot-distro login $DISTRO --shared-tmp -- env IDE_TOKEN="\$TOKEN" PORT="\$PORT" WORKSPACE=/root/projects \\
   PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\
-  bash -c 'cd /opt/pocket-ide && exec node server.js'
+  bash -c 'cd /opt/pocket-ide && if [ -f dist/server.mjs ]; then exec node dist/server.mjs; else exec node server.js; fi'
+EOF
+
+# \`claude\` and \`ubuntu\` in plain Termux: open Claude Code / a shell inside Ubuntu.
+cat > "$PREFIX/bin/claude" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+# Claude Code lives inside Ubuntu (proot); this runs it from Termux in ~/projects.
+exec proot-distro login $DISTRO --shared-tmp -- env PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\
+  HOME=/root TERM="\${TERM:-xterm-256color}" bash -c 'cd /root/projects && exec claude "\$@"' claude "\$@"
+EOF
+cat > "$PREFIX/bin/ubuntu" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+# A shell inside Pocket IDE's Ubuntu (where node, npm, claude and your projects live).
+exec proot-distro login $DISTRO --shared-tmp -- env PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\
+  HOME=/root TERM="\${TERM:-xterm-256color}" bash -lc 'cd /root/projects; exec bash -l'
 EOF
 
 cat > "$PREFIX/bin/pocket-update" <<EOF
@@ -200,7 +229,7 @@ else
   curl -fsSLo "\$TMPDIR/pocket-setup.sh" "https://raw.githubusercontent.com/Sasivisvan/cpp_backend_chat_application/$BRANCH/mobile-ide/termux-setup.sh" && bash "\$TMPDIR/pocket-setup.sh"
 fi
 EOF
-chmod +x "$PREFIX/bin/pocket-bridge" "$PREFIX/bin/pocket-ide" "$PREFIX/bin/pocket-update"
+chmod +x "$PREFIX/bin/pocket-bridge" "$PREFIX/bin/pocket-ide" "$PREFIX/bin/pocket-update" "$PREFIX/bin/claude" "$PREFIX/bin/ubuntu"
 
 # Optional: start the bridge on boot if the Termux:Boot app is installed.
 mkdir -p "$HOME/.termux/boot"
