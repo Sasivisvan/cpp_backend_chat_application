@@ -19,7 +19,6 @@ BRANCH="${BRANCH:-claude/tender-bardeen-qyata4}"
 DISTRO="${DISTRO:-ubuntu}"
 SRC="$HOME/pocket-ide-src"
 APP="$SRC/mobile-ide"
-ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
 
 say() { printf '\n\033[1;38;5;173m==> %s\033[0m\n' "$*"; }
 
@@ -93,14 +92,20 @@ if [ ! -s "$HOME/.pocket-ide/token" ]; then
 fi
 
 say "4/6  Installing Ubuntu (first time takes a few minutes)"
-if [ ! -d "$ROOTFS" ]; then
+# Ask proot-distro itself rather than guessing where it keeps the rootfs
+# (the location differs between proot-distro versions).
+in_ubuntu() { proot-distro login "$DISTRO" -- env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "$@"; }
+if ! in_ubuntu true >/dev/null 2>&1; then
   proot-distro install "$DISTRO"
 fi
-mkdir -p "$ROOTFS/root/.pocket-ide" "$ROOTFS/opt/pocket-ide" "$ROOTFS/root/projects"
-cp "$HOME/.pocket-ide/token" "$ROOTFS/root/.pocket-ide/token"
-# Copy the app (without build outputs) into Ubuntu.
-(cd "$APP" && tar cf - --exclude=node_modules --exclude=public/dist .) | (cd "$ROOTFS/opt/pocket-ide" && tar xf -)
-[ -f "$ROOTFS/root/projects/CLAUDE.md" ] || cp "$APP/templates/CLAUDE.md" "$ROOTFS/root/projects/CLAUDE.md"
+# Everything below goes in through stdin, so it lands inside Ubuntu wherever it lives.
+in_ubuntu mkdir -p /root/.pocket-ide /opt/pocket-ide /root/projects
+in_ubuntu sh -c 'cat > /root/.pocket-ide/token && chmod 600 /root/.pocket-ide/token' < "$HOME/.pocket-ide/token"
+# Copy the app (without build outputs); keep node_modules from a previous install.
+(cd "$APP" && tar cf - --exclude=node_modules --exclude=public/dist --exclude=android .) \
+  | in_ubuntu tar xf - -C /opt/pocket-ide
+in_ubuntu sh -c '[ -f /root/projects/CLAUDE.md ] || cat > /root/projects/CLAUDE.md' < "$APP/templates/CLAUDE.md"
+in_ubuntu test -f /opt/pocket-ide/server.js || { echo "Copying Pocket IDE into Ubuntu failed." >&2; exit 1; }
 
 say "5/6  Installing Node.js, build tools and Claude Code inside Ubuntu"
 proot-distro login "$DISTRO" -- bash -s <<'UBUNTU'
