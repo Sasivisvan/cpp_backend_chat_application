@@ -133,6 +133,20 @@ if [ "$(node_major)" -lt 20 ]; then
 fi
 echo "Ubuntu node: $(/usr/bin/node -v)"
 export PATH=/root/.local/bin:$PATH
+# Ubuntu's npm 9.x breaks under proot (corrupt cache / half-unpacked packages).
+# Install npm 10 straight from the registry with curl (bypassing npm's cache)
+# and make it the default npm/npx.
+NPM_MAJOR=$(npm -v 2>/dev/null | cut -d. -f1); case "$NPM_MAJOR" in ''|*[!0-9]*) NPM_MAJOR=0;; esac
+if [ "$NPM_MAJOR" -lt 10 ]; then
+  echo "Installing npm 10 (Ubuntu's npm is unreliable under proot)"
+  rm -rf /usr/local/lib/npm10 && mkdir -p /usr/local/lib/npm10
+  curl -fsSL https://registry.npmjs.org/npm/-/npm-10.9.2.tgz | tar xz -C /usr/local/lib/npm10
+  printf '#!/bin/sh\nexec node /usr/local/lib/npm10/package/bin/npm-cli.js "$@"\n' > /usr/local/bin/npm
+  printf '#!/bin/sh\nexec node /usr/local/lib/npm10/package/bin/npx-cli.js "$@"\n' > /usr/local/bin/npx
+  chmod +x /usr/local/bin/npm /usr/local/bin/npx
+  hash -r
+fi
+echo "npm: $(npm -v)"
 # npm's cache is flaky under proot ("ENOENT … rename … _cacache"): retry with a
 # fresh cache each time.
 export npm_config_cache=/root/.cache/pocket-npm npm_config_fund=false npm_config_audit=false \
