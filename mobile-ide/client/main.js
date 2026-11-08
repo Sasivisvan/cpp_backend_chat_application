@@ -65,6 +65,8 @@ async function api(path, opts = {}) {
 const q = (p) => encodeURIComponent(p);
 
 function showLogin() {
+  // Inside the Android app: it can fetch the token from Termux by itself.
+  if (window.PocketIDE?.fetchToken && !showLogin.tried) { showLogin.tried = true; window.PocketIDE.fetchToken(); }
   $('#login').classList.remove('hidden');
   $('#tokenInput').focus();
 }

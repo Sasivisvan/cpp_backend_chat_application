@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -156,6 +157,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (downloadReceiver != null) try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
+        if (tokenReceiver != null) try { unregisterReceiver(tokenReceiver); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
@@ -228,6 +230,60 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "Termux refused the command: " + e.getMessage()
                     + "\nMake sure allow-external-apps=true is set in ~/.termux/termux.properties (the setup command does this).";
+        }
+    }
+
+    /**
+     * Reads ~/.pocket-ide/token from Termux and opens the IDE. Uses Termux's
+     * RUN_COMMAND result callback (a PendingIntent that Termux fills with the
+     * command's stdout), so it works even when Android blocks Termux from opening
+     * apps from the background (which breaks the pocketide:// hand-off).
+     */
+    private BroadcastReceiver tokenReceiver;
+    private String fetchToken() {
+        if (!isInstalled(TERMUX)) return "Termux is not installed";
+        if (!hasRunCommandPermission()) {
+            main.post(() -> requestPermissions(new String[]{"com.termux.permission.RUN_COMMAND"}, 1));
+            return "permission";
+        }
+        String action = getPackageName() + ".TOKEN_RESULT";
+        if (tokenReceiver == null) {
+            tokenReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context ctx, Intent intent) {
+                    Bundle res = intent.getBundleExtra("result");
+                    String out = res == null ? "" : String.valueOf(res.getString("stdout", "")).trim();
+                    if (out.matches("[a-fA-F0-9]{16,128}")) {
+                        prefs.edit().putString("token", out).apply();
+                        toast("Connected to Pocket IDE");
+                        openIde();
+                    } else {
+                        String err = res == null ? "no result" : String.valueOf(res.getString("stderr", "")).trim();
+                        toast("Couldn't read the token from Termux" + (err.isEmpty() ? "" : ": " + err)
+                                + ". Is setup finished?");
+                    }
+                }
+            };
+            IntentFilter f = new IntentFilter(action);
+            // The PendingIntent is sent with this app's identity, so the receiver needn't be exported.
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(tokenReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(tokenReceiver, f);
+        }
+        Intent cb = new Intent(action).setPackage(getPackageName());
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 7, cb, flags);
+        Intent i = new Intent();
+        i.setClassName(TERMUX, "com.termux.app.RunCommandService");
+        i.setAction("com.termux.RUN_COMMAND");
+        i.putExtra("com.termux.RUN_COMMAND_PATH", TERMUX_BIN + "/cat");
+        i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{"/data/data/com.termux/files/home/.pocket-ide/token"});
+        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pi);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+            return "ok";
+        } catch (Exception e) {
+            return "Termux refused: " + e.getMessage();
         }
     }
 
@@ -361,12 +417,13 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public String runInTermux(String cmd, boolean background) { return MainActivity.this.runInTermux(cmd, background); }
         @JavascriptInterface public boolean serverUp() { return MainActivity.this.serverUp(); }
+        @JavascriptInterface public String fetchToken() { return MainActivity.this.fetchToken(); }
         @JavascriptInterface public boolean hasToken() { return !prefs.getString("token", "").isEmpty(); }
         @JavascriptInterface public void setToken(String t) {
             if (t != null && t.matches("[a-fA-F0-9]{16,128}")) prefs.edit().putString("token", t).apply();
         }
         @JavascriptInterface public void openIde() { MainActivity.this.openIde(); }
-        @JavascriptInterface public void openSetup() { main.post(() -> web.loadUrl(SETUP_PAGE)); }
+        @JavascriptInterface public void openSetup() { main.post(() -> web.loadUrl(SETUP_PAGE + "#home")); }
         @JavascriptInterface public void openUrl(String url) { openExternal(url); }
         @JavascriptInterface public void openApp(String pkg) {
             Intent i = getPackageManager().getLaunchIntentForPackage(pkg);

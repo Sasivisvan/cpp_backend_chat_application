@@ -177,9 +177,22 @@ $('updIde').onclick = () => {
 $('releases').onclick = () => A.openUrl(`https://github.com/${A.repo()}/releases`);
 $('tokBtn').onclick = () => { const t = $('tok').value.trim(); if (t) { A.setToken(t); A.openIde(); } };
 
+// Server is up: open it, fetching the access token from Termux first if needed.
+function connect() {
+  if (A.hasToken()) return A.openIde();
+  const r = A.fetchToken ? A.fetchToken() : 'old app';
+  if (r === 'ok') { $('status').textContent = 'Connected ✓ · getting access token from Termux…'; }
+  else if (r !== 'permission') {
+    note('Server is running. Run <b>cat ~/.pocket-ide/token</b> in Termux and paste it under <b>Already running? Connect with a token</b> below.');
+    document.querySelector('details').open = true;
+  }
+}
+// Opening the app while the IDE is already running goes straight in
+// (except when the user came here on purpose from the IDE menu: #home).
+if (!location.hash) setTimeout(() => { if (A.serverUp()) connect(); }, 50);
 let waiting = null;
 $('startBtn').onclick = () => {
-  if (A.serverUp() && A.hasToken()) return A.openIde();
+  if (A.serverUp()) return connect();
   if (!A.isInstalled('com.termux')) { note('Install <b>Termux</b> first (step 1).'); return; }
   if (!A.hasRunCommandPermission()) { A.requestRunCommandPermission(); note('Grant the permission (step 4), then tap Start again.'); return; }
   const r = A.runInTermux(START_CMD, true);
@@ -194,7 +207,7 @@ $('startBtn').onclick = () => {
       $('status').textContent = 'Connected ✓';
       clearInterval(waiting);
       // The token normally arrives through pocketide://open; if we already have it, go.
-      if (A.hasToken()) A.openIde();
+      connect();
     } else if (t > 90) {
       clearInterval(waiting);
       $('status').textContent = '';
