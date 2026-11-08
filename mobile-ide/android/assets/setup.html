@@ -87,9 +87,11 @@
 </div>
 
 <div class="step" id="s4">
-  <h2>4 · Let this app start Termux <span class="badge" id="b4"></span></h2>
-  <p>Grant the <b>“Run commands in Termux environment”</b> permission so the Start button works.</p>
-  <div class="row"><button id="permBtn">Grant permission</button><button id="appPerms">App settings</button></div>
+  <h2>4 · Permissions <span class="badge" id="b4"></span></h2>
+  <p>Pocket IDE, Termux and Termux:API each need a few Android permissions. Tap <b>Grant next</b>, allow it, come back, and repeat until everything shows ✓.</p>
+  <button class="primary big" id="grantNext" style="padding:12px;font-size:16px">Grant next permission</button>
+  <ul id="permList" style="list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px"></ul>
+</div>
 </div>
 
 <div class="step">
@@ -147,7 +149,7 @@ function refresh() {
   badge('b2', api, 'check permissions', 'needs Termux:API');
   $('b3').textContent = localStorage.getItem('setupCopied') ? 'copied' : 'to do';
   $('b3').className = 'badge';
-  badge('b4', A.hasRunCommandPermission(), 'granted');
+  renderPerms();
 }
 refresh();
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refresh());
@@ -156,8 +158,55 @@ setInterval(refresh, 3000);
 document.querySelectorAll('[data-url]').forEach((b) => b.onclick = () => A.openUrl(b.dataset.url));
 $('apiSettings').onclick = () => A.appSettings('com.termux.api');
 $('copyCmd').onclick = () => { A.copy(SETUP_CMD); localStorage.setItem('setupCopied', '1'); refresh(); setTimeout(() => A.openApp('com.termux'), 400); };
-$('permBtn').onclick = () => A.requestRunCommandPermission();
-$('appPerms').onclick = () => A.appSettings('com.pocketide.app');
+// ---------- permissions ----------
+const SENSITIVE_CMD = `echo 'Asking for Contacts, SMS and Phone permissions (allow each prompt)...'; termux-contact-list >/dev/null; termux-sms-list -l 1 >/dev/null; termux-call-log -l 1 >/dev/null; termux-telephony-deviceinfo >/dev/null; mkdir -p ~/.pocket-ide; echo '{"allowSensitive": true}' > ~/.pocket-ide/bridge-config.json; pkill -f phone-bridge.js; (setsid nohup node ~/pocket-ide-src/mobile-ide/bridge/phone-bridge.js >> ~/.pocket-ide/bridge.out 2>&1 &); echo; echo 'Done: Claude can now use contacts, SMS and calls (it still asks you before sending or calling).'`;
+function perms() { try { return A.permStatus ? JSON.parse(A.permStatus()) : []; } catch { return []; } }
+function grant(id) {
+  const r = A.permOpen ? A.permOpen(id) : '';
+  if (r === 'sensitive') {
+    if (!confirm('Let Claude read contacts, SMS and call log, and place calls/SMS when you ask?\n\nIt will still ask you before sending anything. You can undo this by deleting ~/.pocket-ide/bridge-config.json in Termux.')) return;
+    termuxRun(SENSITIVE_CMD);
+  } else if (r.startsWith('cmd:')) {
+    const x = A.runInTermux(r.slice(4), true);
+    if (x === 'ok') A.toast('Termux:API will ask for the permission. Allow it, then come back.');
+    else if (x !== 'permission') A.toast(x);
+  } else if (r.startsWith('fg:')) {
+    termuxRun(r.slice(3));
+  }
+  localStorage.setItem('perm.' + id, '1');
+  setTimeout(renderPerms, 1500);
+}
+function renderPerms() {
+  const list = perms();
+  const ul = $('permList');
+  if (!ul || !list.length) return;
+  ul.innerHTML = '';
+  let missing = 0, unknown = 0;
+  for (const p of list) {
+    const state = p.ok === true ? 'ok' : p.ok === null ? (localStorage.getItem('perm.' + p.id) ? 'done?' : 'check') : 'todo';
+    if (p.required && state === 'todo') missing++;
+    if (p.required && state === 'check') unknown++;
+    const li = document.createElement('li');
+    li.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:10px;padding:8px 10px';
+    const label = state === 'ok' ? '✓' : state === 'todo' ? (p.required ? 'needed' : 'optional') : state === 'done?' ? 'opened' : 'check';
+    li.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:14px"><span style="color:var(--muted)">${p.app} ·</span> ${p.title}</div><div style="font-size:12px;color:var(--muted)">${p.why}</div></div>` +
+      `<span class="badge ${state === 'ok' ? 'ok' : p.required ? 'todo' : ''}" style="margin:0">${label}</span>` +
+      (state === 'ok' ? '' : `<button style="padding:6px 10px;font-size:13px">Grant</button>`);
+    const btn = li.querySelector('button');
+    if (btn) btn.onclick = () => grant(p.id);
+    ul.appendChild(li);
+  }
+  const b = $('b4');
+  b.textContent = missing ? missing + ' needed' : unknown ? 'check ' + unknown : '✓ all set';
+  b.className = 'badge ' + (missing ? 'todo' : 'ok');
+  $('grantNext').textContent = missing ? 'Grant next permission (' + missing + ' left)' : unknown ? 'Check remaining (' + unknown + ')' : 'All required permissions granted ✓';
+}
+$('grantNext').onclick = () => {
+  const list = perms();
+  const next = list.find((p) => p.required && p.ok === false)
+    || list.find((p) => p.required && p.ok === null && !localStorage.getItem('perm.' + p.id));
+  if (next) grant(next.id); else A.toast('All required permissions are set');
+};
 $('updApp').onclick = () => A.promptUpdate();
 function termuxRun(cmd, copyFallback) {
   const r = A.runInTermux(cmd, false);

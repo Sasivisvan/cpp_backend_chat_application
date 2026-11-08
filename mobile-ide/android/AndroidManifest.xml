@@ -8,6 +8,8 @@
     <!-- In-app updates: download the new APK and hand it to the installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Opens the "let Termux run in the background" dialog. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Needed on Android 11+ to see whether Termux / Termux:API are installed. -->
     <queries>

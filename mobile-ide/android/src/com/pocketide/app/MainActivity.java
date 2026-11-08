@@ -417,6 +417,14 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public String runInTermux(String cmd, boolean background) { return MainActivity.this.runInTermux(cmd, background); }
         @JavascriptInterface public boolean serverUp() { return MainActivity.this.serverUp(); }
+        @JavascriptInterface public String permStatus() { return new Perms(MainActivity.this).status(); }
+        @JavascriptInterface public String permOpen(String id) {
+            final String[] r = {""};
+            final Object lock = new Object();
+            main.post(() -> { synchronized (lock) { r[0] = new Perms(MainActivity.this).open(id); lock.notify(); } });
+            synchronized (lock) { try { lock.wait(3000); } catch (InterruptedException ignored) { } }
+            return r[0];
+        }
         @JavascriptInterface public String fetchToken() { return MainActivity.this.fetchToken(); }
         @JavascriptInterface public boolean hasToken() { return !prefs.getString("token", "").isEmpty(); }
         @JavascriptInterface public void setToken(String t) {
