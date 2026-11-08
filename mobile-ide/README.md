@@ -20,7 +20,32 @@ A touch keybar (Esc, Tab, Ctrl, Alt, arrows, `|`, `~`, ^C, Paste) sits above the
 terminal tabs. Terminal sessions keep running when you switch apps or lock the phone. When you
 come back, they reconnect and replay their output.
 
-## Install on Android
+## Android app (APK)
+
+**Download the latest:**
+https://github.com/sasivisvan/cpp_backend_chat_application/releases/latest/download/pocket-ide.apk
+(a copy of the current build is also in [`android/release/pocket-ide.apk`](android/release/pocket-ide.apk)).
+
+The app is the front door to everything below:
+
+- a **setup checklist**: install Termux and Termux:API, copy the one-line setup command, grant permissions
+- a **Start** button that launches Ubuntu, the IDE and the phone bridge in Termux, then shows the
+  IDE full-screen
+- **auto-updates**: on launch it checks GitHub's latest release and offers a one-tap download
+  and install. ⋮ → *Check for app update* checks manually. *Update IDE in Termux* runs
+  `pocket-update`.
+
+**How releases happen:** every push that changes `mobile-ide/` runs
+[`.github/workflows/pocket-ide-release.yml`](../.github/workflows/pocket-ide-release.yml). It
+builds the APK with version `1.0.<run number>` and publishes it as the newest GitHub release, so
+the link above always serves the latest build. To build locally: `ANDROID_HOME=~/android-sdk android/build.sh`.
+
+> Signing: builds use the bundled **dev keystore** (`android/keystore/`) so every build can update
+> the previous one. That key is public. Before distributing widely, create your own keystore and
+> add it as the repo secrets `POCKET_IDE_KEYSTORE_B64`, `POCKET_IDE_KEYSTORE_PASS` and
+> `POCKET_IDE_KEY_ALIAS`. Switching keys means uninstalling the old app once.
+
+## Install on Android (Termux part)
 
 **Why not plain Termux?** Current Claude Code releases are native binaries built for regular
 Linux, macOS and Windows. Termux identifies as `android`, and no Android build is published, so

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.pocketide.app">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the app start Pocket IDE inside Termux (user grants it once). -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <!-- In-app updates: download the new APK and hand it to the installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Needed on Android 11+ to see whether Termux / Termux:API are installed. -->
+    <queries>
+        <package android:name="com.termux" />
+        <package android:name="com.termux.api" />
+        <package android:name="com.termux.boot" />
+        <package android:name="org.fdroid.fdroid" />
+    </queries>
+
+    <application
+        android:label="Pocket IDE"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "pocket-ide (app mode)" in Termux opens pocketide://open?token=… to hand over the token -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pocketide" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

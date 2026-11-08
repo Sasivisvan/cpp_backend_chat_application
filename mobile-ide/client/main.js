@@ -504,7 +504,7 @@ $$('#keybar button').forEach((b) => {
     }
     const k = b.dataset.key;
     if (k === 'paste') {
-      try { panel.send(await navigator.clipboard.readText()); }
+      try { panel.send(window.PocketIDE ? window.PocketIDE.readClipboard() : await navigator.clipboard.readText()); }
       catch { const t = prompt('Paste text:'); if (t) panel.send(t); }
       return;
     }
@@ -665,6 +665,8 @@ $$('#moreMenu button').forEach((b) => (b.onclick = () => {
     settings.hidden = !settings.hidden; store.set('hidden', settings.hidden);
     loadDir();
   } else if (a === 'logout') { store.del('token'); location.reload(); }
+  else if (a === 'apphome') { window.PocketIDE?.openSetup(); }
+  else if (a === 'update') { window.PocketIDE?.promptUpdate(); }
 }));
 
 function updateSubtitle() {
@@ -688,6 +690,7 @@ window.addEventListener('keydown', (e) => {
 // ---------- boot ----------
 (async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (window.PocketIDE) $$('.app-only').forEach((el) => el.classList.remove('hidden'));
   if (!TOKEN) return showLogin();
   try { info = await api('/info'); } catch (err) { if (err.message !== 'Unauthorized') toast(err.message, true); return; }
   $('#projectName').textContent = info.name;

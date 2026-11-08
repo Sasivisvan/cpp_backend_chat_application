@@ -30,7 +30,7 @@ fi
 
 say "1/6  Installing Termux packages (git, node, termux-api, proot-distro)"
 pkg update -y -o Dpkg::Options::=--force-confnew
-pkg install -y -o Dpkg::Options::=--force-confnew git nodejs-lts termux-api proot-distro
+pkg install -y -o Dpkg::Options::=--force-confnew git curl nodejs-lts termux-api proot-distro
 
 say "2/6  Fetching Pocket IDE"
 if [ -d "$SRC/.git" ]; then
@@ -86,14 +86,25 @@ EOF
 
 cat > "$PREFIX/bin/pocket-ide" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
-# Start the phone bridge (if needed) and the IDE, then open it in the browser.
+# Start the phone bridge (if needed) and the IDE, then open it.
+#   pocket-ide         open in the browser
+#   pocket-ide --app   open in the Pocket IDE Android app (used by the app's Start button)
 termux-wake-lock 2>/dev/null || true
 if ! pgrep -f phone-bridge.js >/dev/null; then
   nohup node "$APP/bridge/phone-bridge.js" >> "\$HOME/.pocket-ide/bridge.out" 2>&1 &
 fi
 TOKEN=\$(cat "\$HOME/.pocket-ide/token")
 PORT=\${PORT:-8787}
-( sleep 3; termux-open-url "http://127.0.0.1:\$PORT/?token=\$TOKEN" ) &
+open_ide() {
+  if [ "\${1:-}" = "--app" ]; then
+    am start -a android.intent.action.VIEW -d "pocketide://open?token=\$TOKEN" >/dev/null 2>&1
+  else
+    termux-open-url "http://127.0.0.1:\$PORT/?token=\$TOKEN"
+  fi
+}
+up() { curl -s -m 1 -o /dev/null "http://127.0.0.1:\$PORT/manifest.webmanifest"; }
+if up; then open_ide "\${1:-}"; exit 0; fi   # already running
+( for i in \$(seq 1 120); do sleep 1; if up; then open_ide "\${1:-}"; break; fi; done ) &
 exec proot-distro login $DISTRO --shared-tmp -- env IDE_TOKEN="\$TOKEN" PORT="\$PORT" WORKSPACE=/root/projects \\
   bash -lc 'cd /opt/pocket-ide && exec node server.js'
 EOF

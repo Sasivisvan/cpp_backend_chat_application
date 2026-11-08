@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pocket IDE</title>
+<style>
+  :root { --bg:#16181d; --bg2:#1e2128; --bg3:#272b34; --fg:#e3e6ec; --muted:#8b93a3; --accent:#d97757; --ok:#98c379; --warn:#e5c07b; --border:#333844; color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, Roboto, sans-serif; padding:20px 16px 40px; }
+  header { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  header svg { width:48px; height:48px; flex:none; }
+  h1 { font-size:22px; margin:0; }
+  .ver { color:var(--muted); font-size:12px; }
+  p.lead { color:var(--muted); margin:6px 0 18px; }
+  .step { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .step h2 { font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .step p { margin:4px 0 10px; color:var(--muted); font-size:14px; }
+  .badge { font-size:12px; padding:2px 8px; border-radius:999px; background:var(--bg3); color:var(--muted); margin-left:auto; white-space:nowrap; }
+  .badge.ok { color:var(--ok); } .badge.todo { color:var(--warn); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  button { font:inherit; color:var(--fg); background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; }
+  button:active { opacity:.8; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.big { width:100%; padding:16px; font-size:17px; border-radius:14px; }
+  code { display:block; background:#0f1115; border:1px solid var(--border); border-radius:10px; padding:10px; font:12px/1.4 ui-monospace, monospace; word-break:break-all; color:#c8ccd4; margin:8px 0; }
+  #status { text-align:center; color:var(--muted); min-height:22px; margin:12px 0; }
+  .note { background:#2a2418; border:1px solid #5a4a26; color:#e9d9b0; border-radius:12px; padding:10px 12px; font-size:14px; margin-bottom:12px; display:none; }
+  details { margin-top:10px; color:var(--muted); font-size:14px; }
+  summary { cursor:pointer; color:var(--fg); }
+  .done h2 { opacity:.75; }
+</style>
+</head>
+<body>
+<header>
+  <svg viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1e2128"/><path d="M180 170 96 256l84 86M332 170l84 86-84 86" fill="none" stroke="#61afef" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/><path d="M256 150v212M164 203l184 106M164 309l184-106" stroke="#d97757" stroke-width="34" stroke-linecap="round"/></svg>
+  <div><h1>Pocket IDE</h1><div class="ver" id="ver"></div></div>
+</header>
+<p class="lead">Code, terminals and Claude Code on your phone, plus an AI that can control the phone.</p>
+
+<div class="note" id="note"></div>
+
+<button class="primary big" id="startBtn">▶ Start Pocket IDE</button>
+<div id="status"></div>
+
+<div class="step" id="s1">
+  <h2>1 · Install Termux apps <span class="badge" id="b1"></span></h2>
+  <p>Pocket IDE runs Linux, Node and Claude Code inside <b>Termux</b>. Install <b>Termux</b> and <b>Termux:API</b> from F-Droid. Both must come from F-Droid; the Play Store version won't work together.</p>
+  <div class="row">
+    <button data-url="https://f-droid.org/packages/com.termux/">Termux</button>
+    <button data-url="https://f-droid.org/packages/com.termux.api/">Termux:API</button>
+    <button data-url="https://f-droid.org/packages/com.termux.boot/">Termux:Boot (optional)</button>
+  </div>
+</div>
+
+<div class="step" id="s2">
+  <h2>2 · Allow phone access <span class="badge" id="b2"></span></h2>
+  <p>Open <b>Termux:API</b> settings and allow <b>Location → Allow all the time</b> and <b>Notifications</b>, so Claude can set location reminders and alerts.</p>
+  <div class="row"><button id="apiSettings">Open Termux:API settings</button></div>
+</div>
+
+<div class="step" id="s3">
+  <h2>3 · One-time setup in Termux <span class="badge" id="b3"></span></h2>
+  <p>Copy this command, then paste it in Termux and press Enter. It takes about 5–15 minutes and roughly 1.5 GB, and installs Ubuntu, Node and Claude Code.</p>
+  <code id="cmd"></code>
+  <div class="row">
+    <button class="primary" id="copyCmd">Copy &amp; open Termux</button>
+  </div>
+</div>
+
+<div class="step" id="s4">
+  <h2>4 · Let this app start Termux <span class="badge" id="b4"></span></h2>
+  <p>Grant the <b>“Run commands in Termux environment”</b> permission so the Start button works.</p>
+  <div class="row"><button id="permBtn">Grant permission</button><button id="appPerms">App settings</button></div>
+</div>
+
+<div class="step">
+  <h2>Updates</h2>
+  <p>New versions are published on GitHub automatically. The app checks on launch, or you can check now.</p>
+  <div class="row">
+    <button id="updApp">Check for app update</button>
+    <button id="updIde">Update IDE in Termux</button>
+    <button id="releases">All releases</button>
+  </div>
+  <details>
+    <summary>Already running? Connect with a token</summary>
+    <p>If the IDE is running but the app has no token, run <b>cat ~/.pocket-ide/token</b> in Termux and paste the output here.</p>
+    <div class="row"><input id="tok" style="flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--fg)" placeholder="token" /><button id="tokBtn">Connect</button></div>
+  </details>
+</div>
+
+<script>
+const A = window.PocketIDE || {
+  // Browser fallback so the page can be previewed outside the app.
+  version: () => 'dev', repo: () => 'sasivisvan/cpp_backend_chat_application', branch: () => 'claude/tender-bardeen-qyata4',
+  isInstalled: () => false, hasRunCommandPermission: () => false, requestRunCommandPermission() {}, runInTermux: () => 'no app',
+  serverUp: () => false, hasToken: () => false, setToken() {}, openIde() {}, openUrl: (u) => window.open(u), openApp() {}, appSettings() {},
+  copy: (t) => navigator.clipboard?.writeText(t), promptUpdate() {}, toast: (m) => alert(m),
+};
+const $ = (id) => document.getElementById(id);
+const raw = `https://raw.githubusercontent.com/${A.repo()}/${A.branch()}/mobile-ide/termux-setup.sh`;
+const SETUP_CMD = `mkdir -p ~/.termux && (grep -q '^allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps=true' >> ~/.termux/termux.properties) && termux-reload-settings; curl -fsSLo pocket-setup.sh ${raw} && bash pocket-setup.sh`;
+const START_CMD = `if command -v pocket-ide >/dev/null; then pocket-ide --app; else am start -a android.intent.action.VIEW -d 'pocketide://open?missing=1' >/dev/null; fi`;
+
+$('ver').textContent = 'App version ' + A.version();
+$('cmd').textContent = SETUP_CMD;
+
+function note(msg) { const n = $('note'); n.innerHTML = msg; n.style.display = msg ? 'block' : 'none'; }
+if (location.hash === '#missing') note('Pocket IDE isn’t set up in Termux yet. Do <b>step 3</b> first.');
+if (location.hash === '#offline') note('The IDE stopped (Termux closed or the phone killed it). Tap <b>Start</b> to bring it back.');
+
+function badge(id, ok, okText = 'done', todo = 'to do') {
+  const b = $(id); b.textContent = ok ? '✓ ' + okText : todo; b.className = 'badge ' + (ok ? 'ok' : 'todo');
+  b.closest('.step').classList.toggle('done', ok);
+}
+function refresh() {
+  const termux = A.isInstalled('com.termux'), api = A.isInstalled('com.termux.api');
+  badge('b1', termux && api, 'installed', termux ? 'Termux:API missing' : 'to do');
+  badge('b2', api, 'check permissions', 'needs Termux:API');
+  $('b3').textContent = localStorage.getItem('setupCopied') ? 'copied' : 'to do';
+  $('b3').className = 'badge';
+  badge('b4', A.hasRunCommandPermission(), 'granted');
+}
+refresh();
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refresh());
+setInterval(refresh, 3000);
+
+document.querySelectorAll('[data-url]').forEach((b) => b.onclick = () => A.openUrl(b.dataset.url));
+$('apiSettings').onclick = () => A.appSettings('com.termux.api');
+$('copyCmd').onclick = () => { A.copy(SETUP_CMD); localStorage.setItem('setupCopied', '1'); refresh(); setTimeout(() => A.openApp('com.termux'), 400); };
+$('permBtn').onclick = () => A.requestRunCommandPermission();
+$('appPerms').onclick = () => A.appSettings('com.pocketide.app');
+$('updApp').onclick = () => A.promptUpdate();
+$('updIde').onclick = () => {
+  const r = A.runInTermux('if command -v pocket-update >/dev/null; then pocket-update; else echo "Run the setup command first"; fi', false);
+  if (r !== 'ok' && r !== 'permission') A.toast(r);
+};
+$('releases').onclick = () => A.openUrl(`https://github.com/${A.repo()}/releases`);
+$('tokBtn').onclick = () => { const t = $('tok').value.trim(); if (t) { A.setToken(t); A.openIde(); } };
+
+let waiting = null;
+$('startBtn').onclick = () => {
+  if (A.serverUp() && A.hasToken()) return A.openIde();
+  if (!A.isInstalled('com.termux')) { note('Install <b>Termux</b> first (step 1).'); return; }
+  if (!A.hasRunCommandPermission()) { A.requestRunCommandPermission(); note('Grant the permission (step 4), then tap Start again.'); return; }
+  const r = A.runInTermux(START_CMD, true);
+  if (r !== 'ok') { note(r.replace(/\n/g, '<br>')); return; }
+  note('');
+  let t = 0;
+  $('status').textContent = 'Starting Ubuntu + IDE in Termux…';
+  clearInterval(waiting);
+  waiting = setInterval(() => {
+    t++;
+    if (A.serverUp()) {
+      $('status').textContent = 'Connected ✓';
+      clearInterval(waiting);
+      // The token normally arrives through pocketide://open; if we already have it, go.
+      if (A.hasToken()) A.openIde();
+    } else if (t > 90) {
+      clearInterval(waiting);
+      $('status').textContent = '';
+      note('The IDE didn’t start. Open Termux and run <b>pocket-ide</b> to see what’s wrong.');
+    } else {
+      $('status').textContent = 'Starting Ubuntu + IDE in Termux… ' + t + 's';
+    }
+  }, 1000);
+};
+</script>
+</body>
+</html>
