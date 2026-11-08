@@ -68,6 +68,13 @@
   </div>
 </div>
 
+<div class="step" id="access">
+  <h2>Claude's phone access <span class="badge" id="bAccess"></span></h2>
+  <p>Choose what Claude may use on your phone. Turning a switch on asks Android for the permission and takes effect immediately. Claude still asks you before sending messages or calling.</p>
+  <ul id="accessList" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px"></ul>
+  <div class="row" style="margin-top:10px"><button id="accessAll">Turn all on</button><button id="accessNone">Turn all off</button></div>
+</div>
+
 <div class="step">
   <h2>Something went wrong?</h2>
   <p>If Termux shows <b>CANNOT LINK EXECUTABLE … cannot locate symbol</b> (for <code style="display:inline;padding:1px 4px">curl</code>, <code style="display:inline;padding:1px 4px">node</code>, …), its packages are half-upgraded. Tap <b>Repair Termux</b>, wait for “Done”, then do step 3 again.</p>
@@ -158,6 +165,88 @@ setInterval(refresh, 3000);
 document.querySelectorAll('[data-url]').forEach((b) => b.onclick = () => A.openUrl(b.dataset.url));
 $('apiSettings').onclick = () => A.appSettings('com.termux.api');
 $('copyCmd').onclick = () => { A.copy(SETUP_CMD); localStorage.setItem('setupCopied', '1'); refresh(); setTimeout(() => A.openApp('com.termux'), 400); };
+// ---------- Claude's phone access (sensitive bridge commands) ----------
+// Each switch = one command in the phone bridge's allow list (~/.pocket-ide/bridge-config.json,
+// re-read on every request) + a Termux:API call that makes Android ask for the permission.
+const CAPS = [
+  { cmd: 'contact-list', title: 'Contacts', why: 'Message or call people by name ("WhatsApp Kathin…")', ask: 'termux-contact-list' },
+  { cmd: 'sms-send', title: 'Send SMS', why: 'Text people when you ask', ask: 'termux-sms-list -l 1' },
+  { cmd: 'sms-list', title: 'Read SMS', why: 'OTPs, bank alerts, "what did Mom text me?"', ask: 'termux-sms-list -l 1' },
+  { cmd: 'call-log', title: 'Call log', why: '"Who called me today?"', ask: 'termux-call-log -l 1' },
+  { cmd: 'telephony-call', title: 'Make calls', why: '"Call Ravi"', ask: 'termux-telephony-deviceinfo' },
+  { cmd: 'camera-photo', title: 'Camera', why: 'Take photos for your apps / scripts', ask: 'termux-camera-photo -c 0 "$TMPDIR/pide-cam.jpg"; rm -f "$TMPDIR/pide-cam.jpg"' },
+  { cmd: 'microphone-record', title: 'Microphone', why: 'Voice notes and recording scripts', ask: 'termux-microphone-record -l 1 -f "$TMPDIR/pide-mic.m4a"; sleep 2; termux-microphone-record -q; rm -f "$TMPDIR/pide-mic.m4a"' },
+  { cmd: 'notification-list', title: 'Read notifications', why: '"Summarise my notifications"', special: 'notif' },
+];
+let accessCfg = null;
+window.__termuxResult = (id, out, code) => {
+  if (id === 'cfg') {
+    try { accessCfg = JSON.parse(out.trim() || '{}'); } catch { accessCfg = {}; }
+    renderAccess();
+  } else if (id === 'save') {
+    A.toast(code === 0 ? 'Saved. Claude can use it now.' : 'Could not save: ' + out);
+  }
+};
+function allowedSet() {
+  const c = accessCfg || {};
+  return new Set(c.allowSensitive === true ? CAPS.map((x) => x.cmd) : (Array.isArray(c.allow) ? c.allow : []));
+}
+function loadAccess() {
+  if (!A.termuxOutput) return;
+  const r = A.termuxOutput('cfg', 'cat ~/.pocket-ide/bridge-config.json 2>/dev/null || echo "{}"');
+  if (r !== 'ok') { $('accessList').innerHTML = '<li style="color:var(--muted);font-size:14px">Finish setup and grant “Run commands in Termux” first.</li>'; }
+}
+function saveAccess(set, enabled) {
+  const cfg = { ...(accessCfg || {}) };
+  cfg.allowSensitive = false;
+  cfg.allow = CAPS.map((x) => x.cmd).filter((c) => set.has(c));
+  accessCfg = cfg;
+  renderAccess();
+  const json = JSON.stringify(cfg); // no single quotes in it, safe inside '...'
+  let script = `mkdir -p ~/.pocket-ide && printf '%s\\n' '${json}' > ~/.pocket-ide/bridge-config.json`;
+  // Make Termux:API ask Android for the newly enabled permissions.
+  for (const cap of enabled) if (cap.ask) script += `; (${cap.ask}) >/dev/null 2>&1`;
+  A.termuxOutput('save', script + '; true');
+  if (enabled.some((c) => c.special === 'notif')) {
+    A.toast('Allow notification access for Termux:API on the next screen');
+    setTimeout(() => A.openNotificationAccess(), 600);
+  } else if (enabled.length) {
+    A.toast('Allow the permission prompt(s) from Termux:API');
+  }
+}
+function renderAccess() {
+  const ul = $('accessList');
+  if (!accessCfg) { ul.innerHTML = '<li style="color:var(--muted);font-size:14px">Loading…</li>'; return; }
+  const set = allowedSet();
+  ul.innerHTML = '';
+  for (const cap of CAPS) {
+    const on = set.has(cap.cmd);
+    const li = document.createElement('li');
+    li.style.cssText = 'display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:10px;padding:10px';
+    li.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:15px">${cap.title}</div><div style="font-size:12px;color:var(--muted)">${cap.why}</div></div>` +
+      `<button role="switch" aria-checked="${on}" style="width:52px;height:30px;border-radius:999px;padding:0;position:relative;border:0;background:${on ? 'var(--accent)' : '#444a57'}">` +
+      `<span style="position:absolute;top:3px;left:${on ? 25 : 3}px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s"></span></button>`;
+    li.querySelector('button').onclick = () => {
+      const next = allowedSet();
+      if (on) next.delete(cap.cmd); else next.add(cap.cmd);
+      saveAccess(next, on ? [] : [cap]);
+    };
+    ul.appendChild(li);
+  }
+  const n = set.size;
+  $('bAccess').textContent = n ? n + ' on' : 'all off';
+  $('bAccess').className = 'badge' + (n ? ' ok' : '');
+}
+$('accessAll').onclick = () => {
+  if (!confirm('Let Claude use contacts, SMS, call log, calls, camera, microphone and notifications?\n\nIt still asks you before sending messages or calling.')) return;
+  const before = allowedSet();
+  saveAccess(new Set(CAPS.map((x) => x.cmd)), CAPS.filter((c) => !before.has(c.cmd)));
+};
+$('accessNone').onclick = () => saveAccess(new Set(), []);
+renderAccess();
+setTimeout(loadAccess, 300);
+if (location.hash === '#access') setTimeout(() => $('access').scrollIntoView({ behavior: 'smooth' }), 400);
+
 // ---------- permissions ----------
 const SENSITIVE_CMD = `echo 'Asking for Contacts, SMS and Phone permissions (allow each prompt)...'; termux-contact-list >/dev/null; termux-sms-list -l 1 >/dev/null; termux-call-log -l 1 >/dev/null; termux-telephony-deviceinfo >/dev/null; mkdir -p ~/.pocket-ide; echo '{"allowSensitive": true}' > ~/.pocket-ide/bridge-config.json; pkill -f phone-bridge.js; (setsid nohup node ~/pocket-ide-src/mobile-ide/bridge/phone-bridge.js >> ~/.pocket-ide/bridge.out 2>&1 &); echo; echo 'Done: Claude can now use contacts, SMS and calls (it still asks you before sending or calling).'`;
 function perms() { try { return A.permStatus ? JSON.parse(A.permStatus()) : []; } catch { return []; } }

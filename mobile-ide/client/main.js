@@ -637,6 +637,14 @@ async function loadPhone() {
     const s = await api('/phone/status');
     st.textContent = `● Bridge connected${s.mock ? ' (mock mode – no Termux:API)' : ''} · ${s.geofences} triggers · ${s.reminders} reminders`;
     st.style.color = 'var(--ok)';
+    const NAMES = { 'contact-list': 'Contacts', 'sms-send': 'Send SMS', 'sms-list': 'Read SMS', 'call-log': 'Call log',
+      'telephony-call': 'Make calls', 'camera-photo': 'Camera', 'microphone-record': 'Microphone', 'notification-list': 'Read notifications' };
+    const allowed = (s.allowed || []).map((c) => NAMES[c] || c);
+    const acc = $('#accessSummary');
+    acc.innerHTML = `<li><div class="main"><div class="t">${allowed.length ? esc(allowed.join(', ')) : 'Basic only'}</div>` +
+      `<div class="s">${allowed.length ? 'Claude may use these' : 'Contacts, SMS, calls, camera… are off'}</div></div>` +
+      (window.PocketIDE?.openSetupAt ? '<button class="chip" id="manageAccess">Manage</button>' : '') + '</li>';
+    $('#manageAccess')?.addEventListener('click', () => window.PocketIDE.openSetupAt('#access'));
     const a = await api('/phone/automations');
     renderCards('#geoList', a.geofences, (g) => ({
       t: `📍 ${g.name}`,

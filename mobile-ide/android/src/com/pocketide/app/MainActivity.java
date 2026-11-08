@@ -158,6 +158,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (downloadReceiver != null) try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
         if (tokenReceiver != null) try { unregisterReceiver(tokenReceiver); } catch (Exception ignored) {}
+        if (outputReceiver != null) try { unregisterReceiver(outputReceiver); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
@@ -277,6 +278,56 @@ public class MainActivity extends Activity {
         i.setAction("com.termux.RUN_COMMAND");
         i.putExtra("com.termux.RUN_COMMAND_PATH", TERMUX_BIN + "/cat");
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{"/data/data/com.termux/files/home/.pocket-ide/token"});
+        i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pi);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+            return "ok";
+        } catch (Exception e) {
+            return "Termux refused: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Runs a bash script in Termux (background) and hands its stdout to the page via
+     * window.__termuxResult(reqId, stdout, exitCode). Used for settings that live in
+     * Termux, like which phone capabilities Claude may use.
+     */
+    private BroadcastReceiver outputReceiver;
+    private int outputSeq = 100;
+    private String termuxOutput(String reqId, String script) {
+        if (!isInstalled(TERMUX)) return "Termux is not installed";
+        if (!hasRunCommandPermission()) {
+            main.post(() -> requestPermissions(new String[]{"com.termux.permission.RUN_COMMAND"}, 1));
+            return "permission";
+        }
+        String action = getPackageName() + ".TERMUX_OUTPUT";
+        if (outputReceiver == null) {
+            outputReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context ctx, Intent intent) {
+                    Bundle res = intent.getBundleExtra("result");
+                    String id = intent.getStringExtra("reqId");
+                    String out = res == null ? "" : String.valueOf(res.getString("stdout", ""));
+                    int code = res == null ? -1 : res.getInt("exitCode", -1);
+                    String js = "window.__termuxResult && window.__termuxResult(" + JSONObject.quote(id == null ? "" : id)
+                            + "," + JSONObject.quote(out) + "," + code + ")";
+                    main.post(() -> web.evaluateJavascript(js, null));
+                }
+            };
+            IntentFilter f = new IntentFilter(action);
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(outputReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(outputReceiver, f);
+        }
+        Intent cb = new Intent(action).setPackage(getPackageName()).putExtra("reqId", reqId);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+        PendingIntent pi = PendingIntent.getBroadcast(this, outputSeq++, cb, flags);
+        Intent i = new Intent();
+        i.setClassName(TERMUX, "com.termux.app.RunCommandService");
+        i.setAction("com.termux.RUN_COMMAND");
+        i.putExtra("com.termux.RUN_COMMAND_PATH", TERMUX_BIN + "/bash");
+        i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[]{"-c", script});
+        i.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", pi);
         try {
@@ -417,6 +468,10 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public String runInTermux(String cmd, boolean background) { return MainActivity.this.runInTermux(cmd, background); }
         @JavascriptInterface public boolean serverUp() { return MainActivity.this.serverUp(); }
+        @JavascriptInterface public String termuxOutput(String reqId, String script) { return MainActivity.this.termuxOutput(reqId, script); }
+        @JavascriptInterface public void openNotificationAccess() {
+            main.post(() -> { try { startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")); } catch (Exception e) { toast("Open Settings → Notifications → Device & app notifications → Termux:API"); } });
+        }
         @JavascriptInterface public String permStatus() { return new Perms(MainActivity.this).status(); }
         @JavascriptInterface public String permOpen(String id) {
             final String[] r = {""};
@@ -431,6 +486,10 @@ public class MainActivity extends Activity {
             if (t != null && t.matches("[a-fA-F0-9]{16,128}")) prefs.edit().putString("token", t).apply();
         }
         @JavascriptInterface public void openIde() { MainActivity.this.openIde(); }
+        @JavascriptInterface public void openSetupAt(String hash) {
+            String h = hash != null && hash.matches("#[a-z]{1,20}") ? hash : "#home";
+            main.post(() -> web.loadUrl(SETUP_PAGE + h));
+        }
         @JavascriptInterface public void openSetup() { main.post(() -> web.loadUrl(SETUP_PAGE + "#home")); }
         @JavascriptInterface public void openUrl(String url) { openExternal(url); }
         @JavascriptInterface public void openApp(String pkg) {

@@ -111,7 +111,8 @@ in_ubuntu sh -c 'cat > /root/.pocket-ide/token && chmod 600 /root/.pocket-ide/to
 # Copy the app (without build outputs); keep node_modules from a previous install.
 (cd "$APP" && tar cf - --exclude=node_modules --exclude=public/dist --exclude=android .) \
   | in_ubuntu tar xf - -C /opt/pocket-ide
-in_ubuntu sh -c '[ -f /root/projects/CLAUDE.md ] || cat > /root/projects/CLAUDE.md' < "$APP/templates/CLAUDE.md"
+# Install/refresh Claude's phone instructions, unless the user rewrote the file.
+in_ubuntu sh -c 'F=/root/projects/CLAUDE.md; if [ ! -f "$F" ] || head -1 "$F" | grep -q "^# You are running on an Android phone"; then cat > "$F"; else cat > /dev/null; fi' < "$APP/templates/CLAUDE.md"
 in_ubuntu test -f /opt/pocket-ide/server.js || { echo "Copying Pocket IDE into Ubuntu failed." >&2; exit 1; }
 
 say "5/6  Installing Node.js, build tools and Claude Code inside Ubuntu"
@@ -253,6 +254,14 @@ termux-wake-lock
 nohup node "$APP/bridge/phone-bridge.js" >> "\$HOME/.pocket-ide/bridge.out" 2>&1 &
 EOF
 chmod +x "$HOME/.termux/boot/pocket-bridge"
+
+# Restart a running phone bridge so it picks up the new code.
+if pgrep -f phone-bridge.js >/dev/null; then
+  pkill -f phone-bridge.js || true
+  sleep 1
+  (setsid nohup node "$APP/bridge/phone-bridge.js" >> "$HOME/.pocket-ide/bridge.out" 2>&1 &)
+  echo "Phone bridge restarted"
+fi
 
 say "Done!"
 cat <<'MSG'

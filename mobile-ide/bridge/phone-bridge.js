@@ -24,8 +24,17 @@ if (!fs.existsSync(TOKEN_FILE)) fs.writeFileSync(TOKEN_FILE, crypto.randomBytes(
 const TOKEN = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
 
 // Commands that read private data or cost money / contact people are off by
-// default. Turn them on in ~/.pocket-ide/bridge-config.json: {"allowSensitive": true}
-const config = { allowSensitive: false, ...readJSON(CONFIG_FILE, {}) };
+// default. The user turns them on one by one in the Pocket IDE app
+// (Permissions → Claude's phone access), which writes ~/.pocket-ide/bridge-config.json:
+//   {"allow": ["contact-list", "sms-send"]}     or     {"allowSensitive": true}  (all)
+// Re-read on every request, so switches take effect immediately.
+const config = () => ({ allowSensitive: false, allow: [], ...readJSON(CONFIG_FILE, {}) });
+const sensitiveAllowed = (cmd) => { const c = config(); return c.allowSensitive === true || (Array.isArray(c.allow) && c.allow.includes(cmd)); };
+const LABELS = {
+  'contact-list': 'Contacts', 'sms-send': 'Send SMS', 'sms-list': 'Read SMS', 'call-log': 'Call log',
+  'telephony-call': 'Make calls', 'camera-photo': 'Camera', 'microphone-record': 'Microphone',
+  'notification-list': 'Read notifications', 'telephony-cellinfo': 'Cell info', fingerprint: 'Fingerprint',
+};
 
 const SAFE = new Set([
   'location', 'notification', 'notification-remove', 'toast', 'tts-speak', 'vibrate', 'torch',
@@ -210,7 +219,8 @@ const num = (v, name) => { const n = Number(v); if (!Number.isFinite(n)) throw n
 
 const routes = {
   'GET /status': async () => ({
-    ok: true, mock: MOCK, allowSensitive: config.allowSensitive, pid: process.pid, uptime: Math.round(process.uptime()),
+    ok: true, mock: MOCK, allowSensitive: config().allowSensitive === true,
+    allowed: [...SENSITIVE].filter(sensitiveAllowed), pid: process.pid, uptime: Math.round(process.uptime()),
     geofences: db.geofences.filter((g) => g.enabled !== false).length,
     reminders: db.reminders.filter((r) => r.enabled !== false).length,
     lastFix,
@@ -218,8 +228,8 @@ const routes = {
   'POST /call': async (b) => {
     const cmd = String(b.cmd || '').replace(/^termux-/, '');
     if (!SAFE.has(cmd) && !SENSITIVE.has(cmd)) throw Object.assign(new Error(`Command not allowed: ${cmd}`), { status: 403 });
-    if (SENSITIVE.has(cmd) && !config.allowSensitive) {
-      throw Object.assign(new Error(`"${cmd}" is a sensitive command and is disabled. Enable with {"allowSensitive": true} in ${CONFIG_FILE} and restart the bridge.`), { status: 403 });
+    if (SENSITIVE.has(cmd) && !sensitiveAllowed(cmd)) {
+      throw Object.assign(new Error(`"${LABELS[cmd] || cmd}" access is off. Ask the user to turn on "${LABELS[cmd] || cmd}" in the Pocket IDE app → Permissions → Claude's phone access (takes effect immediately).`), { status: 403 });
     }
     const args = Array.isArray(b.args) ? b.args.map(String) : [];
     return termux(cmd, args, { input: b.input, timeout: Math.min(Number(b.timeout) || 30000, 120000) });

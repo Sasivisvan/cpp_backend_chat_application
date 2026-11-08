@@ -196,6 +196,7 @@ const sessions = new Map();
 function createSession({ kind, cwd, cols, rows }) {
   const id = crypto.randomBytes(6).toString('hex');
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', POCKET_IDE: '1' };
+  delete env.IDE_TOKEN; // programs in the terminal (incl. Claude) don't need the IDE's access token
   let args = [];
   if (kind === 'claude' && os.platform() !== 'win32') {
     const s = JSON.stringify(SHELL);

@@ -79,8 +79,9 @@ phone remind --at 22:00 --repeat daily --command "termux-volume ring 0" "Night m
   in the **Phone** tab, where they can delete it.
 - Commands that read private data or contact people (`sms-send`, `sms-list`, `contact-list`,
   `call-log`, `telephony-call`, `camera-photo`, `microphone-record`, `notification-list`) are
-  disabled unless the user enabled them in `~/.pocket-ide/bridge-config.json` (Termux side).
-  If one is refused, tell the user how to enable it instead of working around it. Always confirm
-  with the user before sending messages or placing calls.
+  off until the user turns them on in the **Pocket IDE app → Permissions → Claude's phone access**
+  (one switch each, takes effect immediately). If one is refused, tell the user which switch to
+  turn on. Never edit the bridge config yourself to get around it. Always confirm with the user
+  before sending messages or placing calls.
 - If `phone status` fails, the bridge isn't running. Ask the user to run `pocket-bridge` (or just
   `pocket-ide`) in Termux.

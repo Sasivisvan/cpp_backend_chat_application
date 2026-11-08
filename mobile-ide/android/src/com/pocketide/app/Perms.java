@@ -102,8 +102,6 @@ final class Perms {
 
             add(out, "termux_storage", "Termux", "Storage (optional)", "Use phone files (/sdcard) in projects",
                     granted(TERMUX, Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_IMAGES" : "android.permission.READ_EXTERNAL_STORAGE"), false);
-            add(out, "api_sensitive", "Termux:API", "Contacts, SMS, Calls (optional)", "WhatsApp/SMS by contact name, reading SMS, calling",
-                    granted(API, "android.permission.READ_CONTACTS"), false);
             add(out, "boot", "Termux:Boot", "Start on boot (optional)", "Automations come back after a restart",
                     installed(BOOT), false);
         } catch (Exception ignored) { }
