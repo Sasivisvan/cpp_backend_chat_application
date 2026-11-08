@@ -78,6 +78,9 @@ if [ -z "${POCKET_SRC_FILE:-}" ]; then
   if [ -d "$SRC/.git" ]; then
     git -C "$SRC" fetch --depth 1 origin "$BRANCH" && git -C "$SRC" reset --hard FETCH_HEAD
   else
+    # ~/pocket-ide-src only holds Pocket IDE's own code (projects live in Ubuntu's
+    # /root/projects), so a leftover copy from an app-based install can go.
+    rm -rf "$SRC"
     git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$SRC"
   fi
 fi
