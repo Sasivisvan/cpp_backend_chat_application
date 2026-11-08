@@ -102,7 +102,9 @@ const raw = `https://raw.githubusercontent.com/${A.repo()}/${A.branch()}/mobile-
 // The installer and the IDE source come from this app (127.0.0.1:8786), not GitHub,
 // so setup works even though the repository is private.
 const SETUP_CMD = `mkdir -p ~/.termux && (grep -q '^allow-external-apps' ~/.termux/termux.properties 2>/dev/null || echo 'allow-external-apps=true' >> ~/.termux/termux.properties) && termux-reload-settings; curl -fsSLo pocket-setup.sh http://127.0.0.1:8786/setup.sh && POCKET_SRC_URL=http://127.0.0.1:8786/pocket-ide.tar.gz bash pocket-setup.sh`;
-const START_CMD = `if command -v pocket-ide >/dev/null; then pocket-ide --app; else am start -a android.intent.action.VIEW -d 'pocketide://open?missing=1' >/dev/null; fi`;
+const START_CMD = `mkdir -p ~/.pocket-ide; if command -v pocket-ide >/dev/null; then pocket-ide --app > ~/.pocket-ide/ide.log 2>&1; else am start -a android.intent.action.VIEW -d 'pocketide://open?missing=1' >/dev/null; fi`;
+const LOG_CMD = `echo '--- last Pocket IDE start (~/.pocket-ide/ide.log) ---'; tail -n 60 ~/.pocket-ide/ide.log 2>/dev/null || echo 'no log yet'; echo; echo 'Tip: run  pocket-ide  here to start it and watch the output.'`;
+window.showLog = () => { const r = A.runInTermux(LOG_CMD, false); if (r !== 'ok' && r !== 'permission') A.toast(r); };
 
 $('ver').textContent = 'App version ' + A.version();
 $('cmd').textContent = SETUP_CMD;
@@ -161,9 +163,9 @@ $('startBtn').onclick = () => {
     } else if (t > 90) {
       clearInterval(waiting);
       $('status').textContent = '';
-      note('The IDE didn’t start. Open Termux and run <b>pocket-ide</b> to see what’s wrong.');
+      note('The IDE didn’t start within 90 s. <button onclick="showLog()">Show log in Termux</button>');
     } else {
-      $('status').textContent = 'Starting Ubuntu + IDE in Termux… ' + t + 's';
+      $('status').innerHTML = 'Starting Ubuntu + IDE in Termux… ' + t + 's' + (t > 20 ? ' · <a href="#" onclick="showLog();return false" style="color:var(--accent)">show log</a>' : '');
     }
   }, 1000);
 };
